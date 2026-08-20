@@ -1,28 +1,33 @@
 # AGRO-SMART
 **Smart Farming. Smarter Decisions. Better Harvests.**
 
-> An integrated AI-powered digital agriculture platform built for Indian farmers, agribusinesses, and agronomists to optimize crop health, mitigate meteorological risks, access farm mechanization on-demand, and make profitable selling decisions.
-
 ---
 
-## 🌾 The 4 Core Agricultural Services
+## 📖 Project Overview
 
-1. **AI Crop Disease Detection**
-   - Upload leaf photos to diagnose bacterial, fungal, or viral diseases across multiple crops (**Tomato, Potato, Rice, Wheat, Cotton, Corn**).
-   - Structured pathology reports featuring confidence levels, severity classifications, actionable field steps, cultural prevention tips, and Hindi advisory.
-   - *Safety Disclaimer: Preliminary decision support only — consult agricultural extension officers for confirmation.*
+**AGRO-SMART** is an integrated AI-powered digital agriculture platform designed to empower Indian farmers, rural communities, and agronomists with timely data-driven insights, localized pathology support, on-demand farm mechanization, and transparent market economics.
 
-2. **Crop-Specific Weather Risk Alerts**
-   - Translates raw meteorological readings (temperature, humidity, precipitation probability, wind speed) into crop-specific agronomic meaning.
-   - Reusable rules engine evaluating fungal incubation thresholds, terminal heat stress, and 7-day foliar spray suitability windows.
+### The Problem It Solves
+Smallholder farmers frequently face fragmented agricultural tools, inaccessible expert diagnostics, sudden meteorological crop damage, prohibitive equipment ownership costs, and volatile commodity price discovery. AGRO-SMART consolidates these essential agricultural workflows into a single, intuitive platform to reduce crop losses and improve farm profitability.
 
-3. **Farm Machinery Rental ("Uber for Tractors")**
-   - Location-aware marketplace connecting smallholder farmers with nearby tractor, harvester, rotavator, cultivator, and seed drill owners.
-   - Dynamic hours-to-cost calculation, server-side rate verification, and complete booking management (`Pending`, `Accepted`, `Completed`, `Cancelled`).
+### Four Core Modules
+1. **AI Crop Disease Detection & Auto Identification**:
+   - Multimodal vision analysis supporting Auto Crop Detection across major crops (*Tomato, Potato, Rice, Wheat, Cotton, Corn/Maize*).
+   - Strict non-plant image validation, image quality checks, severity rating, observable signs, actionable remedies, cultural prevention steps, and regional Hindi advisory (*किसान सलाह*).
+2. **Weather Risk Intelligence**:
+   - Converts raw meteorological forecasts (temperature, relative humidity, precipitation probability, wind) into crop-specific agronomic risk indicators.
+   - Evaluates fungal incubation risk windows, heat stress thresholds, and 7-day foliar spray suitability conditions.
+3. **Machinery Rental Marketplace ("Uber for Tractors")**:
+   - Location-aware equipment rental marketplace connecting smallholders with local tractor, harvester, rotavator, and cultivator owners.
+   - Dynamic hourly rate calculation, status synchronization (`Pending`, `Accepted`, `Completed`, `Cancelled`), and double-booking prevention.
+4. **Market Intelligence & Price Analytics**:
+   - Real-time APMC mandi spot prices, historical price trend graphs (7, 15, 30 days), freight arbitrage comparison, and explainable **SELL / HOLD** recommendations.
 
-4. **Market Intelligence & Selling Decisions**
-   - Data-driven APMC mandi spot pricing, multi-day historical trend graphs (7, 15, 30 days), and price change analytics.
-   - Transparent estimate ranges and explainable recommendations (**SELL**, **MONITOR**, **WAIT**) with mandi freight arbitrage calculations.
+> [!NOTE]
+> **Hackathon MVP Status**: AGRO-SMART is currently developed as a hackathon MVP prototype demonstrating full-stack workflow integration across vision AI, weather intelligence, equipment sharing, and market analytics.
+
+> [!IMPORTANT]
+> **Safety & AI Decision Support Disclaimer**: AI-generated pathology detections and predictive insights provide preliminary decision support only and do not constitute a guaranteed agronomic diagnosis. Farmers should consult local Krishi Vigyan Kendra (KVK) experts or agricultural extension officers prior to applying major chemical treatments or operational interventions.
 
 ---
 
