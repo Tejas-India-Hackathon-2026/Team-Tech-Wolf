@@ -66,7 +66,7 @@ def create_app():
         Never exposes secrets or API keys.
         """
         weather_key = os.getenv("WEATHER_API_KEY", "").strip()
-        disease_key = os.getenv("DISEASE_AI_API_KEY", os.getenv("DISEASE_API_KEY", "")).strip()
+        disease_key = os.getenv("GEMINI_API_KEY", os.getenv("DISEASE_AI_API_KEY", os.getenv("DISEASE_API_KEY", ""))).strip()
 
         return jsonify({
             "status": "ok",
@@ -74,7 +74,7 @@ def create_app():
             "version": "1.0.0",
             "database_configured": get_database_status(),
             "weather_service_configured": bool(weather_key and not weather_key.startswith("your-")),
-            "disease_service_configured": bool(disease_key and not disease_key.startswith("your-")),
+            "disease_service_configured": bool(disease_key and len(disease_key) > 5 and not disease_key.startswith("your-")),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
         })
 

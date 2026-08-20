@@ -1,12 +1,12 @@
 from flask import Blueprint, request
 from services.disease_service import (
-    analyze_crop_disease, 
     validate_image_file, 
     get_supported_crops, 
     get_scan_history,
     get_crop_scenarios,
     CROP_DISEASE_PROFILES
 )
+from services.gemini_disease_service import analyze_crop_image_with_gemini
 from utils.helpers import success_response, error_response
 
 disease_bp = Blueprint("disease", __name__, url_prefix="/api/disease")
@@ -16,27 +16,25 @@ def analyze_crop():
     """
     Primary endpoint: POST /api/disease/analyze
     Accepts multipart/form-data with 'image' file and 'crop' form field.
-    Validates crop selection, image presence, file format, and size.
-    Returns structured JSON with crop-specific pathology intelligence.
+    'crop' can be 'auto' / 'Auto Detect Crop' or a specific crop name (Tomato, Potato, Rice, etc.).
+    Routes image through Gemini Multimodal Vision service on Flask backend.
     """
     try:
-        image_file = None
-        crop = None
+        image_bytes = None
+        mime_type = "image/jpeg"
+        crop = "auto"
         user_id = None
         filename = "uploaded_leaf.jpg"
         scenario_id = None
 
         if request.content_type and "multipart/form-data" in request.content_type:
-            # 1. Validate Crop Selection in Form Data
-            crop = request.form.get("crop")
-            if not crop or not str(crop).strip() or str(crop).strip().lower() in {'null', 'undefined', ''}:
-                return error_response("Please select a crop before analysis.", code="MISSING_CROP", status_code=400)
-            
-            crop = crop.strip()
+            # 1. Parse Crop Selection
+            raw_crop = request.form.get("crop") or "auto"
+            crop = str(raw_crop).strip()
             user_id = request.form.get("user_id")
             scenario_id = request.form.get("scenario_id") or request.form.get("scenario")
 
-            # 2. Validate Image File in Form Data
+            # 2. Validate Image File
             if "image" not in request.files:
                 return error_response("Please upload a crop/leaf image.", code="MISSING_IMAGE", status_code=400)
             
@@ -49,32 +47,29 @@ def analyze_crop():
                 return error_response(validation_error, code="INVALID_IMAGE", status_code=400)
 
             filename = image_file.filename
+            mime_type = image_file.content_type or "image/jpeg"
+            image_bytes = image_file.read()
 
         elif request.is_json:
             data = request.get_json() or {}
-            crop = data.get("crop")
-            if not crop or not str(crop).strip() or str(crop).strip().lower() in {'null', 'undefined', ''}:
-                return error_response("Please select a crop before analysis.", code="MISSING_CROP", status_code=400)
-            
-            crop = crop.strip()
+            raw_crop = data.get("crop") or "auto"
+            crop = str(raw_crop).strip()
             user_id = data.get("user_id")
             scenario_id = data.get("scenario_id") or data.get("scenario")
-            filename = data.get("filename")
+            filename = data.get("filename") or f"{crop.lower()}_sample_leaf.jpg"
 
-            if not filename and "image" not in data and "image_base64" not in data:
-                return error_response("Please upload a crop/leaf image.", code="MISSING_IMAGE", status_code=400)
-            
-            if not filename:
-                filename = f"{crop.lower()}_sample_leaf.jpg"
+            if "image_base64" in data:
+                import base64
+                image_bytes = base64.b64decode(data["image_base64"])
+            else:
+                # Use sample dummy leaf bytes for scenario demo
+                image_bytes = b"DEMO_SAMPLE_IMAGE_PAYLOAD"
 
         else:
-            # Fallback form data
-            crop = request.form.get("crop") if request.form else None
-            if not crop or not str(crop).strip() or str(crop).strip().lower() in {'null', 'undefined', ''}:
-                return error_response("Please select a crop before analysis.", code="MISSING_CROP", status_code=400)
-            
-            crop = crop.strip()
-            scenario_id = request.form.get("scenario_id") or request.form.get("scenario") if request.form else None
+            # Fallback form
+            raw_crop = request.form.get("crop") if request.form else "auto"
+            crop = str(raw_crop).strip()
+            scenario_id = request.form.get("scenario_id") if request.form else None
 
             if "image" in request.files:
                 image_file = request.files["image"]
@@ -82,17 +77,22 @@ def analyze_crop():
                 if not is_valid:
                     return error_response(validation_error, code="INVALID_IMAGE", status_code=400)
                 filename = image_file.filename
+                mime_type = image_file.content_type or "image/jpeg"
+                image_bytes = image_file.read()
             else:
                 return error_response("Please upload a crop/leaf image.", code="MISSING_IMAGE", status_code=400)
 
-        result = analyze_crop_disease(
-            image_file=image_file,
-            crop_name=crop,
+        # Call Gemini multimodal visual pathology service
+        result = analyze_crop_image_with_gemini(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            selected_crop=crop,
             user_id=user_id,
-            filename=filename,
-            scenario_id=scenario_id
+            scenario_id=scenario_id,
+            filename=filename
         )
-        return success_response(result, message="Crop analysis completed successfully")
+
+        return success_response(result, message="Crop visual analysis completed successfully")
 
     except ValueError as ve:
         return error_response(message=str(ve), code="VALIDATION_ERROR", status_code=400)
@@ -106,10 +106,7 @@ def diagnose_crop_alias():
 
 @disease_bp.route("/history", methods=["GET"])
 def get_history():
-    """
-    Returns recent crop disease scan history for the farmer.
-    Query param: limit (default 10)
-    """
+    """Returns recent crop disease scan history for the farmer."""
     try:
         limit = request.args.get("limit", default=10, type=int)
         history = get_scan_history(limit=limit)
@@ -119,8 +116,10 @@ def get_history():
 
 @disease_bp.route("/crops", methods=["GET"])
 def list_crops():
-    """Returns all supported crops for pathology diagnosis."""
+    """Returns all supported crops for pathology diagnosis with Auto Detect option."""
     crops = get_supported_crops()
+    if "Auto Detect Crop" not in crops:
+        crops = ["Auto Detect Crop"] + crops
     return success_response(crops, message="Supported crops fetched")
 
 @disease_bp.route("/scenarios", methods=["GET"])

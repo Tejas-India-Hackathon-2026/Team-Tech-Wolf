@@ -68,9 +68,16 @@ export const diseaseService = {
    */
   async getCrops() {
     try {
-      return await request('/disease/crops');
+      const data = await request('/disease/crops');
+      if (Array.isArray(data)) {
+        if (!data.includes('Auto Detect Crop')) {
+          return ['Auto Detect Crop', ...data];
+        }
+        return data;
+      }
+      return ['Auto Detect Crop', 'Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn', 'Chilli', 'Onion', 'Brinjal', 'Maize'];
     } catch {
-      return ['Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn'];
+      return ['Auto Detect Crop', 'Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn', 'Chilli', 'Onion', 'Brinjal', 'Maize'];
     }
   },
 
