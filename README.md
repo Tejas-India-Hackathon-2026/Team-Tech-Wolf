@@ -73,10 +73,34 @@ Smallholder farmers frequently face fragmented agricultural tools, inaccessible 
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: React 18, Vite, Lucide React icons, CSS3 Light Agriculture Theme Design System.
-- **Backend**: Python 3, Flask, Flask-CORS, python-dotenv, Requests.
-- **Database**: Supabase (PostgreSQL 15) with relational foreign keys and indexed queries.
-- **APIs**: Open-Meteo Agro-Weather API, AI Plant Pathology Vision Engine, APMC Mandi price feeds.
+### Frontend
+- **React**: Modern component-based user interface architecture
+- **Vite**: High-performance frontend build tooling and local development proxy
+- **JavaScript (ES6+)**: Core client application logic and asynchronous service layer
+- **Responsive Light-Theme UI**: Custom CSS3 design system tailored for agricultural usability, high-contrast visibility, and mobile responsiveness
+
+### Backend
+- **Python 3**: Server-side processing, data validation, and business logic execution
+- **Flask & Flask-CORS**: Lightweight modular REST API blueprints with secure cross-origin handling
+- **REST API Architecture**: Standardized endpoint design supporting JSON payloads and `multipart/form-data` image uploads
+
+### Artificial Intelligence
+- **Gemini Multimodal Vision API**: Deep visual foliar leaf analysis executed on the backend
+- **Crop Auto-Detection**: Automated crop species identification directly from image inputs
+- **Non-Plant Image Validation**: Strict multi-stage gating protocol blocking non-plant images to prevent false positives
+- **Preliminary Crop Disease Decision Support**: Severity rating, actionable treatments, preventive cultural practices, and regional Hindi advisory (*preliminary decision support, not guaranteed diagnosis*)
+
+### Weather Intelligence
+- **Open-Meteo Live Weather Architecture**: Zero-key live meteorological forecasting integration
+- **Crop-Specific Risk Evaluation**: Custom rules engine evaluating fungal incubation thresholds, terminal heat stress, and spray suitability windows
+
+### Database & Storage
+- **Supabase-Compatible Architecture**: Relational PostgreSQL schema designed for persistent agricultural records
+- **Local/Demo Mode Support**: Seamless fallback with in-memory stores ensuring complete functionality during local hackathon demo evaluation
+
+### Other & Infrastructure
+- **Git & GitHub**: Version control and repository management
+- **Environment-Variable Secret Management**: Strict `.env` configuration management via `python-dotenv` without hardcoded secrets
 
 ---
 
