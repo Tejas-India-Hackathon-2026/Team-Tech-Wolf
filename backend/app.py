@@ -78,7 +78,7 @@ def create_app():
             "app": "AGRO-SMART Full-Stack Engine",
             "version": "1.0.0",
             "database_configured": get_database_status(),
-            "weather_service_configured": bool(weather_key and not weather_key.startswith("your-")),
+            "weather_service_configured": True,  # Open-Meteo public agro-weather provider is active
             "disease_service_configured": bool(disease_key and len(disease_key) > 5 and not disease_key.startswith("your-")),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
         })

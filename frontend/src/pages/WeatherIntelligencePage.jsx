@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   CloudSunRain, 
   Droplets, 
@@ -17,54 +17,107 @@ import {
   History, 
   Clock, 
   Sparkles,
-  ArrowRight,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { weatherService } from '../services/weatherService';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from '../context/AuthContext';
-import { useGeolocation } from '../hooks/useGeolocation';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 
-const PRESET_LOCATIONS = [
-  { id: 'Patna, Bihar', name: 'Patna, Bihar (Gangetic Plains)' },
-  { id: 'Pune, Maharashtra', name: 'Pune, Maharashtra (Western Agri Hub)' },
-  { id: 'Nashik, Maharashtra', name: 'Nashik, Maharashtra (Grape & Onion Belt)' },
-  { id: 'Nagpur, Maharashtra', name: 'Nagpur, Maharashtra (Citrus & Cotton)' },
-  { id: 'Latur, Maharashtra', name: 'Latur, Maharashtra (Soybean & Pulses)' },
-  { id: 'Karnal, Haryana', name: 'Karnal, Haryana (Wheat & Basmati Belt)' },
-  { id: 'Ludhiana, Punjab', name: 'Ludhiana, Punjab (Wheat & Paddy Bowl)' },
-  { id: 'Agra, Uttar Pradesh', name: 'Agra, Uttar Pradesh (Potato Belt)' },
-  { id: 'Varanasi, Uttar Pradesh', name: 'Varanasi, Uttar Pradesh (Vegetable Hub)' },
-  { id: 'Jaipur, Rajasthan', name: 'Jaipur, Rajasthan (Mustard & Pulses)' },
-  { id: 'Indore, Madhya Pradesh', name: 'Indore, Madhya Pradesh (Soybean & Wheat)' },
-  { id: 'Bengaluru, Karnataka', name: 'Bengaluru, Karnataka (Horticulture Hub)' },
-  { id: 'Hyderabad, Telangana', name: 'Hyderabad, Telangana (Cotton & Chilly)' }
+const CROPS = [
+  'Tomato', 'Potato', 'Rice', 'Wheat', 'Corn', 
+  'Onion', 'Chilli', 'Brinjal', 'Cotton', 'Sugarcane'
 ];
-
-const CROPS = ['Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn', 'Sugarcane'];
 
 const WeatherIntelligencePage = () => {
   const { user } = useAuth();
-  const [selectedLocation, setSelectedLocation] = useState('Patna, Bihar');
-  const [customCity, setCustomCity] = useState('');
+  
+  // Location and search states
+  const [locationInput, setLocationInput] = useState('Patna, Bihar');
+  const [selectedCoords, setSelectedCoords] = useState({ lat: 25.5941, lon: 85.1376 });
   const [selectedCrop, setSelectedCrop] = useState('Tomato');
   
+  // Autocomplete suggestions
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchingLoc, setIsSearchingLoc] = useState(false);
+  const searchTimeoutRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Weather data states
   const [loading, setLoading] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const geo = useGeolocation();
+  // Handle outside click to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const handleFetchRisk = async (locationOverride = null, cropOverride = null, lat = null, lon = null) => {
-    const targetLoc = locationOverride || customCity.trim() || selectedLocation;
+  // Debounced autocomplete search
+  const handleLocationInputChange = (e) => {
+    const value = e.target.value;
+    setLocationInput(value);
+    setSelectedCoords(null); // Reset explicit coords on manual typing
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (value.trim().length >= 2) {
+      setIsSearchingLoc(true);
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const results = await weatherService.searchLocations(value);
+          setSuggestions(results);
+          setShowSuggestions(results.length > 0);
+        } catch {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        } finally {
+          setIsSearchingLoc(false);
+        }
+      }, 350);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setIsSearchingLoc(false);
+    }
+  };
+
+  const handleSelectSuggestion = (sugg) => {
+    const displayName = sugg.display_name || sugg.name || sugg.location;
+    setLocationInput(displayName);
+    setSelectedCoords({ lat: sugg.latitude, lon: sugg.longitude });
+    setShowSuggestions(false);
+    handleFetchRisk(displayName, selectedCrop, sugg.latitude, sugg.longitude);
+  };
+
+  // Primary Fetch Risk Handler
+  const handleFetchRisk = async (locOverride = null, cropOverride = null, latOverride = null, lonOverride = null) => {
+    const targetLoc = locOverride || locationInput.trim();
     const targetCrop = cropOverride || selectedCrop;
+    const lat = latOverride !== null ? latOverride : (selectedCoords ? selectedCoords.lat : null);
+    const lon = lonOverride !== null ? lonOverride : (selectedCoords ? selectedCoords.lon : null);
+
+    if (!targetLoc) {
+      setErrorMessage('Please enter or select a location.');
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
+    setShowSuggestions(false);
 
     try {
       const data = await weatherService.getWeatherRisk(targetLoc, targetCrop, lat, lon);
@@ -76,9 +129,9 @@ const WeatherIntelligencePage = () => {
           notificationService.notifyWeatherRisk(
             user.id,
             targetCrop,
-            targetLoc,
+            data.location || targetLoc,
             data.risk_level,
-            data.recommendation || `High humidity and rainfall may increase fungal disease risk for ${targetCrop}.`
+            data.concern || data.recommendation || `High agro-weather risk detected for ${targetCrop}.`
           );
         } catch (notifErr) {
           console.warn('[WeatherIntelligence] Notification notice:', notifErr);
@@ -90,28 +143,47 @@ const WeatherIntelligencePage = () => {
         if (Array.isArray(hist)) setHistoryList(hist);
       });
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to fetch weather risk evaluation.');
+      setErrorMessage(err.message || 'Failed to fetch live weather risk evaluation.');
+      setWeatherData(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Initial Load
   useEffect(() => {
-    handleFetchRisk('Patna, Bihar', 'Tomato');
+    handleFetchRisk('Patna, Bihar', 'Tomato', 25.5941, 85.1376);
     weatherService.getHistory().then((hist) => {
       if (Array.isArray(hist)) setHistoryList(hist);
     });
   }, []);
 
-  const handleUseGPS = () => {
-    if (geo.latitude && geo.longitude) {
-      handleFetchRisk(`GPS Farm (${geo.latitude.toFixed(2)}, ${geo.longitude.toFixed(2)})`, selectedCrop, geo.latitude, geo.longitude);
-    } else {
-      geo.refresh();
-      if (geo.latitude && geo.longitude) {
-        handleFetchRisk(`GPS Farm (${geo.latitude.toFixed(2)}, ${geo.longitude.toFixed(2)})`, selectedCrop, geo.latitude, geo.longitude);
-      }
+  // Use My Location (GPS)
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setErrorMessage('Geolocation is not supported by your browser.');
+      return;
     }
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const gpsLabel = `My Farm Location (${lat.toFixed(2)}, ${lon.toFixed(2)})`;
+        setLocationInput(gpsLabel);
+        setSelectedCoords({ lat, lon });
+        handleFetchRisk(gpsLabel, selectedCrop, lat, lon);
+      },
+      (error) => {
+        setLoading(false);
+        console.warn('[WeatherIntelligence] Geolocation denied/failed:', error);
+        setErrorMessage('Location permission denied. Please search your location manually.');
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
   };
 
   // Determine Risk Badge Classes & Palette
@@ -128,7 +200,7 @@ const WeatherIntelligencePage = () => {
             <span className="badge-pill badge-emerald">
               <CloudSunRain size={14} /> Service 2 of 4
             </span>
-            <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Crop-Specific Meteorological Rules Engine</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Open-Meteo Hyperlocal Meteorological Rules</span>
           </div>
 
           <button
@@ -164,11 +236,11 @@ const WeatherIntelligencePage = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-700)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Select Location</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Search Any Location</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-700)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Fetch Live Weather</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Fetch Live Open-Meteo</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-700)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
@@ -176,7 +248,7 @@ const WeatherIntelligencePage = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-700)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Generate Alert & Action</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Explainable Risk & Action</span>
         </div>
       </div>
 
@@ -185,17 +257,27 @@ const WeatherIntelligencePage = () => {
         <div style={{
           background: '#fef2f2',
           border: '1px solid #fecaca',
-          borderRadius: 'var(--radius-sm)',
-          padding: '0.85rem 1rem',
-          marginBottom: '1.5rem',
+          borderRadius: 'var(--radius-md)',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.75rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.6rem',
+          justifyContent: 'space-between',
           color: '#991b1b',
-          fontSize: '0.88rem'
+          fontSize: '0.92rem',
+          boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
         }}>
-          <AlertCircle size={18} />
-          <span>{errorMessage}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <AlertCircle size={20} style={{ color: '#dc2626', flexShrink: 0 }} />
+            <span>{errorMessage}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setErrorMessage(null)} 
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#991b1b' }}
+          >
+            <X size={18} />
+          </button>
         </div>
       )}
 
@@ -205,7 +287,7 @@ const WeatherIntelligencePage = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Clock size={16} style={{ color: 'var(--primary-700)' }} />
-              Recent Weather Risk Checks (Supabase Log)
+              Recent Weather Risk Checks (Assessment Log)
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Showing last {historyList.length} assessments</span>
           </div>
@@ -240,50 +322,90 @@ const WeatherIntelligencePage = () => {
         </div>
       )}
 
-      {/* Control Input Card */}
+      {/* Interactive Control Input Card */}
       <div className="glass-card" style={{ marginBottom: '2rem', padding: '1.5rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', alignItems: 'flex-end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', alignItems: 'flex-end' }}>
           
-          {/* 1. Location Selector */}
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">1. Select State & City Hub</label>
-            <select 
-              className="form-control" 
-              value={selectedLocation} 
-              onChange={(e) => {
-                setSelectedLocation(e.target.value);
-                setCustomCity('');
-              }}
-            >
-              {PRESET_LOCATIONS.map((loc) => (
-                <option key={loc.id} value={loc.id}>{loc.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 2. Custom City Search */}
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Or Type Custom City / District</label>
+          {/* 1. Free-form Location Search with Autocomplete */}
+          <div className="form-group" style={{ marginBottom: 0, position: 'relative' }} ref={dropdownRef}>
+            <label className="form-label">1. Search Location (Any City / Town)</label>
             <div style={{ position: 'relative' }}>
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-dim)' }} />
               <input
                 type="text"
                 className="form-control"
-                style={{ paddingLeft: '2.25rem' }}
-                placeholder="e.g. Muzaffarpur, Gaya, Kolhapur..."
-                value={customCity}
-                onChange={(e) => setCustomCity(e.target.value)}
+                style={{ paddingLeft: '2.25rem', paddingRight: '2rem' }}
+                placeholder="e.g. Jamui, Patna, Delhi, Mumbai, Gaya..."
+                value={locationInput}
+                onChange={handleLocationInputChange}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleFetchRisk();
+                  }
+                }}
               />
+              {isSearchingLoc && (
+                <RefreshCw size={14} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '13px', color: 'var(--primary-700)' }} />
+              )}
             </div>
+
+            {/* Live Autocomplete Suggestions Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: '#ffffff',
+                border: '1px solid var(--border-green)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                zIndex: 50,
+                marginTop: '4px',
+                maxHeight: '240px',
+                overflowY: 'auto'
+              }}>
+                {suggestions.map((sugg, idx) => (
+                  <div
+                    key={sugg.id || idx}
+                    onClick={() => handleSelectSuggestion(sugg)}
+                    style={{
+                      padding: '0.65rem 0.9rem',
+                      cursor: 'pointer',
+                      borderBottom: idx < suggestions.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                      fontSize: '0.88rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      color: 'var(--text-heading)',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f0fdf4'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
+                  >
+                    <MapPin size={14} style={{ color: 'var(--primary-700)', flexShrink: 0 }} />
+                    <span>{sugg.display_name || sugg.name || sugg.location}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 3. Crop Selector */}
+          {/* 2. Target Crop Selector */}
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">2. Select Target Crop</label>
+            <label className="form-label">2. Target Agricultural Crop</label>
             <select 
               className="form-control" 
               value={selectedCrop} 
-              onChange={(e) => setSelectedCrop(e.target.value)}
+              onChange={(e) => {
+                const newCrop = e.target.value;
+                setSelectedCrop(newCrop);
+                if (weatherData) {
+                  handleFetchRisk(null, newCrop);
+                }
+              }}
             >
               {CROPS.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -291,7 +413,7 @@ const WeatherIntelligencePage = () => {
             </select>
           </div>
 
-          {/* 4. Action Buttons */}
+          {/* 3. Action Buttons */}
           <div style={{ display: 'flex', gap: '0.6rem' }}>
             <button 
               type="button" 
@@ -302,8 +424,8 @@ const WeatherIntelligencePage = () => {
             >
               {loading ? (
                 <>
-                  <RefreshCw size={16} className="animate-pulse" />
-                  <span>Evaluating...</span>
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Fetching...</span>
                 </>
               ) : (
                 <>
@@ -316,30 +438,37 @@ const WeatherIntelligencePage = () => {
             <button 
               type="button" 
               className="btn btn-secondary" 
-              onClick={handleUseGPS}
-              title="Use GPS Coordinates"
-              style={{ padding: '0.8rem' }}
+              onClick={handleUseMyLocation}
+              title="Use My Location (GPS)"
+              style={{ padding: '0.8rem 1rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
               <Compass size={18} style={{ color: 'var(--primary-700)' }} />
+              <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>GPS</span>
             </button>
           </div>
 
         </div>
       </div>
 
-      {loading && <LoadingSkeleton text={`Applying crop rules for ${selectedCrop} at ${customCity || selectedLocation}...`} />}
+      {loading && <LoadingSkeleton text={`Applying ${selectedCrop} agronomic rules for live Open-Meteo weather at ${locationInput}...`} />}
 
       {/* Main Results Display */}
       {!loading && weatherData && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
-          {/* Top Weather Summary Cards */}
+          {/* Top Weather Summary Header */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <MapPin size={18} style={{ color: 'var(--primary-700)' }} />
-                Real-Time Weather: {weatherData.location}
-              </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                  <MapPin size={20} style={{ color: 'var(--primary-700)' }} />
+                  {weatherData.location}
+                </h3>
+                <span className="badge-pill badge-emerald" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.76rem', fontWeight: 600 }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} className="animate-pulse" />
+                  Live Weather (Open-Meteo)
+                </span>
+              </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
                 Target Crop: <strong style={{ color: 'var(--text-heading)' }}>{weatherData.crop}</strong> • Condition: <strong style={{ color: 'var(--primary-700)' }}>{weatherData.weather_condition}</strong>
               </div>
@@ -347,7 +476,7 @@ const WeatherIntelligencePage = () => {
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
               gap: '1.25rem'
             }}>
               {/* Temperature Card */}
@@ -451,7 +580,7 @@ const WeatherIntelligencePage = () => {
             </div>
           </div>
 
-          {/* Concern Card vs Recommended Action Card */}
+          {/* Explainable Agronomic Concern vs Recommended Action Card */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.75rem' }}>
             
             {/* 1. Concern Card */}
@@ -464,14 +593,19 @@ const WeatherIntelligencePage = () => {
                   <ShieldAlert size={20} />
                 </div>
                 <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)' }}>
-                  Agronomic Concern
+                  Agronomic Concern & Hazard
                 </h3>
               </div>
 
               <div style={{ background: '#f8faf7', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '1.25rem', marginBottom: '1rem' }}>
-                <p style={{ fontSize: '0.96rem', color: 'var(--text-heading)', lineHeight: '1.6', fontWeight: 500 }}>
+                <p style={{ fontSize: '0.96rem', color: 'var(--text-heading)', lineHeight: '1.6', fontWeight: 600, marginBottom: '0.5rem' }}>
                   "{weatherData.concern}"
                 </p>
+                {weatherData.explanation && (
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.5', margin: 0 }}>
+                    {weatherData.explanation}
+                  </p>
+                )}
               </div>
 
               <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -489,7 +623,7 @@ const WeatherIntelligencePage = () => {
                   <CheckCircle2 size={20} />
                 </div>
                 <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)' }}>
-                  Recommended Action
+                  Recommended Farmer Action
                 </h3>
               </div>
 
@@ -517,7 +651,7 @@ const WeatherIntelligencePage = () => {
                   </h4>
                 </div>
                 <span className={`badge-pill ${
-                  weatherData.spray_advisory.status === 'Optimal' 
+                  weatherData.spray_advisory.status === 'Safe' || weatherData.spray_advisory.status === 'Optimal'
                     ? 'badge-emerald' 
                     : weatherData.spray_advisory.status === 'Caution' 
                     ? 'badge-amber' 
@@ -526,7 +660,7 @@ const WeatherIntelligencePage = () => {
                   {weatherData.spray_advisory.status} Window
                 </span>
               </div>
-              <p style={{ color: '#0c4a6e', fontSize: '0.92rem', lineHeight: '1.5' }}>
+              <p style={{ color: '#0c4a6e', fontSize: '0.92rem', lineHeight: '1.5', margin: 0 }}>
                 {weatherData.spray_advisory.advice}
               </p>
             </div>
@@ -545,39 +679,28 @@ const WeatherIntelligencePage = () => {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: '#f8faf7', color: 'var(--text-dim)' }}>
                       <th style={{ padding: '0.85rem 1rem' }}>Day</th>
+                      <th style={{ padding: '0.85rem 1rem' }}>Condition</th>
                       <th style={{ padding: '0.85rem 1rem' }}>Temp (Max / Min)</th>
-                      <th style={{ padding: '0.85rem 1rem' }}>Humidity</th>
                       <th style={{ padding: '0.85rem 1rem' }}>Rain Chance</th>
-                      <th style={{ padding: '0.85rem 1rem' }}>Spray Window</th>
-                      <th style={{ padding: '0.85rem 1rem' }}>Projected Risk</th>
+                      <th style={{ padding: '0.85rem 1rem' }}>Crop Risk</th>
                     </tr>
                   </thead>
                   <tbody>
                     {weatherData.forecast.map((day, idx) => {
-                      const dayRain = day.rain_chance || 20;
-                      const daySpray = dayRain > 50 ? 'Avoid' : dayRain > 35 ? 'Caution' : 'Optimal';
-                      const dayRisk = (day.humidity > 75 && dayRain > 40) ? 'HIGH' : (day.humidity > 65 || dayRain > 30) ? 'MODERATE' : 'LOW';
-
+                      const dayRisk = day.risk_level || 'LOW';
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? '#ffffff' : '#fafbfa' }}>
                           <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: 'var(--text-heading)' }}>
                             {day.day}
                           </td>
                           <td style={{ padding: '0.85rem 1rem', color: 'var(--text-main)' }}>
+                            {day.weather_condition || 'Partly Cloudy'}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', color: 'var(--text-main)' }}>
                             {day.temp_max}°C / {day.temp_min}°C
                           </td>
                           <td style={{ padding: '0.85rem 1rem', color: 'var(--text-main)' }}>
-                            {day.humidity}%
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem', color: 'var(--text-main)' }}>
-                            {dayRain}%
-                          </td>
-                          <td style={{ padding: '0.85rem 1rem' }}>
-                            <span className={`badge-pill ${
-                              daySpray === 'Optimal' ? 'badge-emerald' : daySpray === 'Caution' ? 'badge-amber' : 'badge-red'
-                            }`}>
-                              {daySpray}
-                            </span>
+                            {day.rain_chance}%
                           </td>
                           <td style={{ padding: '0.85rem 1rem' }}>
                             <span className={`badge-pill ${

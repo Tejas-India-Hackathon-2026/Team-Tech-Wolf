@@ -3,6 +3,7 @@ from services.weather_service import (
     get_agro_weather_risk, 
     get_supported_crops, 
     get_supported_locations,
+    search_locations,
     get_weather_check_history
 )
 from utils.helpers import success_response, error_response
@@ -14,15 +15,13 @@ def get_weather_risk():
     """
     Primary Endpoint: GET /api/weather/risk
     Parameters:
-      - location (or city): e.g. "Patna, Bihar" or "Pune, Maharashtra"
-      - crop: e.g. "Tomato", "Potato", "Rice", "Wheat"
-      - lat, lon: optional precise coordinates
+      - location (or city, q): e.g. "Jamui, Bihar", "Patna", "Delhi"
+      - crop: e.g. "Tomato", "Potato", "Rice", "Wheat", "Corn", "Onion", "Chilli", "Brinjal"
+      - lat, lon: optional float coordinates (GPS or Autocomplete selection)
       - user_id: optional user identifier
-    Returns:
-      temperature, humidity, rain_chance, weather_condition, risk_level, concern, recommendation
     """
     try:
-        location = request.args.get("location") or request.args.get("city") or "Patna, Bihar"
+        location = request.args.get("location") or request.args.get("city") or request.args.get("q") or "Patna, Bihar"
         crop = request.args.get("crop", "Tomato")
         lat = request.args.get("lat", type=float)
         lon = request.args.get("lon", type=float)
@@ -36,8 +35,25 @@ def get_weather_risk():
             user_id=user_id
         )
         return success_response(risk_data, message="Crop-specific agro weather risk evaluated successfully")
+    except ValueError as ve:
+        return error_response(message=str(ve), code="LOCATION_NOT_FOUND", status_code=404)
+    except RuntimeError as re:
+        return error_response(message=str(re), code="WEATHER_SERVICE_UNAVAILABLE", status_code=503)
     except Exception as e:
         return error_response(message="Failed to compute weather risk", details=str(e), status_code=500)
+
+@weather_bp.route("/locations", methods=["GET"])
+def list_locations():
+    """
+    Dynamic Location Search & Autocomplete Endpoint: GET /api/weather/locations?q=<query>
+    Returns real geocoding matches from Open-Meteo or preset agricultural hubs.
+    """
+    try:
+        query = request.args.get("q") or request.args.get("search") or request.args.get("query")
+        results = search_locations(query=query)
+        return success_response(results, message="Location suggestions retrieved")
+    except Exception as e:
+        return error_response("Failed to search locations", details=str(e), status_code=500)
 
 @weather_bp.route("/history", methods=["GET"])
 def get_history():
@@ -57,9 +73,3 @@ def list_crops():
     """Returns list of supported crops for weather vulnerability profiling."""
     crops = get_supported_crops()
     return success_response(crops, message="Crop list retrieved")
-
-@weather_bp.route("/locations", methods=["GET"])
-def list_locations():
-    """Returns list of preset agricultural state & city hubs."""
-    locations = get_supported_locations()
-    return success_response(locations, message="Location list retrieved")
