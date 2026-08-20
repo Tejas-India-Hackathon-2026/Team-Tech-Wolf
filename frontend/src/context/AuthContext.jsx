@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/authService';
+import { authService, normalizeRole } from '../services/authService';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Initialize session on mount
   useEffect(() => {
@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.warn('[AuthContext] Session load error:', err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
@@ -47,25 +47,29 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
-  const updateUser = (updates) => {
-    const updated = authService.updateSessionUser(updates);
-    if (updated) {
-      setUser(updated);
-    }
+  const hasRole = (role) => {
+    if (!user) return false;
+    return normalizeRole(user.role) === normalizeRole(role);
   };
+
+  const isFarmer = user ? normalizeRole(user.role) === 'farmer' : false;
+  const isMachineryOwner = user ? normalizeRole(user.role) === 'machine_owner' : false;
+  const isAdmin = user ? normalizeRole(user.role) === 'admin' : false;
 
   const value = {
     user,
     token,
-    loading,
+    isLoading,
+    loading: isLoading, // Backwards-compatible alias
     isAuthenticated: !!user,
-    isFarmer: user?.user_type === 'Farmer',
-    isMachineryOwner: user?.user_type === 'Machinery Owner',
-    isAdmin: user?.user_type === 'Admin',
+    role: user ? normalizeRole(user.role) : null,
+    isFarmer,
+    isMachineryOwner,
+    isAdmin,
+    hasRole,
     login,
     register,
-    logout,
-    updateUser
+    logout
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

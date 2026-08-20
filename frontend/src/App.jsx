@@ -10,55 +10,73 @@ import MarketIntelligencePage from './pages/MarketIntelligencePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import OwnerDashboardPage from './pages/OwnerDashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './context/AuthContext';
 
 function App() {
   return (
-    <AuthProvider>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <Navbar />
-        <main style={{ flex: 1 }}>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/disease-detection" element={<DiseaseDetectionPage />} />
-            <Route path="/weather-intelligence" element={<WeatherIntelligencePage />} />
-            <Route path="/machinery-rental" element={<MachineryRentalPage />} />
-            <Route path="/market-intelligence" element={<MarketIntelligencePage />} />
-            
-            {/* Authentication Routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            
-            {/* Protected User Dashboard Route */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              } 
-            />
+    <ErrorBoundary>
+      <AuthProvider>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Navbar />
+          <main style={{ flex: 1 }}>
+            <Routes>
+              {/* Public Application Routes */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/disease-detection" element={<DiseaseDetectionPage />} />
+              <Route path="/weather-intelligence" element={<WeatherIntelligencePage />} />
+              <Route path="/machinery-rental" element={<MachineryRentalPage />} />
+              <Route path="/market-intelligence" element={<MarketIntelligencePage />} />
+              
+              {/* Authentication Routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              
+              {/* Role-Protected Dashboards */}
+              {/* 1. Farmer Dashboard */}
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute allowedRoles={['farmer']}>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                } 
+              />
 
-            {/* Protected Admin Dashboard Route */}
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute allowedRoles={['Admin']}>
-                  <AdminDashboardPage />
-                </ProtectedRoute>
-              } 
-            />
+              {/* 2. Machinery Owner Dashboard */}
+              <Route 
+                path="/owner/dashboard" 
+                element={
+                  <ProtectedRoute allowedRoles={['machine_owner']}>
+                    <OwnerDashboardPage />
+                  </ProtectedRoute>
+                } 
+              />
 
-            {/* Fallback Catch-all Route */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </AuthProvider>
+              {/* 3. Admin Dashboard */}
+              <Route 
+                path="/admin/dashboard" 
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminDashboardPage />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Alias for /admin -> /admin/dashboard */}
+              <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+              {/* Catch-all fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

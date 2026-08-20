@@ -26,6 +26,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { machineryService } from '../services/machineryService';
+import { bookingService } from '../services/bookingService';
 import { formatCurrency, formatDistance } from '../utils/formatters';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../context/AuthContext';
@@ -64,7 +65,7 @@ const MachineryRentalPage = () => {
   const [farmerName, setFarmerName] = useState(user?.name || '');
   const [farmerPhone, setFarmerPhone] = useState(user?.phone || '');
   const [serviceLocation, setServiceLocation] = useState(user ? `${user.district || 'Pune'}, ${user.state || 'Maharashtra'}` : 'Patna Rural, Bihar');
-  const [bookingDate, setBookingDate] = useState('2026-08-22');
+  const [bookingDate, setBookingDate] = useState('2026-08-25');
   const [startTime, setStartTime] = useState('08:00 AM');
   const [estimatedHours, setEstimatedHours] = useState(4);
   const [bookingSuccess, setBookingSuccess] = useState(null);
@@ -97,7 +98,7 @@ const MachineryRentalPage = () => {
 
   const fetchBookings = async () => {
     try {
-      const data = await machineryService.getBookings();
+      const data = await bookingService.getBookings();
       if (Array.isArray(data)) setBookingsList(data);
     } catch (err) {
       console.error(err);
@@ -149,18 +150,23 @@ const MachineryRentalPage = () => {
         machinery_id: selectedEquipment.id,
         machine_name: selectedEquipment.machine_name,
         machine_type: selectedEquipment.machine_type,
+        farmer_id: user?.id || 'usr-demo-farmer-01',
         farmer_name: farmerName,
+        farmer_phone: farmerPhone,
         phone: farmerPhone,
         service_location: serviceLocation,
         booking_date: bookingDate,
         start_time: startTime,
+        duration: Number(estimatedHours),
         estimated_hours: Number(estimatedHours),
         price_per_hour: selectedEquipment.price_per_hour,
+        total_estimated_cost: selectedEquipment.price_per_hour * Number(estimatedHours),
+        owner_id: selectedEquipment.owner_id || 'usr-demo-owner-02',
         owner_name: selectedEquipment.owner_name,
         owner_phone: selectedEquipment.owner_phone
       };
 
-      const res = await machineryService.book(payload);
+      const res = await bookingService.createBooking(payload);
       setBookingSuccess(res);
       fetchBookings();
     } catch (err) {
@@ -171,7 +177,7 @@ const MachineryRentalPage = () => {
   };
 
   const handleUpdateStatus = async (bookingId, newStatus) => {
-    await machineryService.updateStatus(bookingId, newStatus);
+    await bookingService.updateBookingStatus(bookingId, newStatus);
     fetchBookings();
   };
 

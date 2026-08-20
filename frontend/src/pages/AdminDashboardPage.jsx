@@ -10,33 +10,32 @@ import {
   CheckCircle, 
   XCircle, 
   AlertTriangle, 
-  Lock, 
-  Unlock, 
   Trash2, 
   RefreshCw, 
   UserCheck, 
   UserX, 
-  Eye, 
   Sparkles, 
   Layers, 
   Clock, 
   MapPin, 
   Phone, 
   Mail, 
-  SlidersHorizontal,
-  ChevronRight,
-  LogOut,
-  AlertCircle
+  LogOut, 
+  AlertCircle 
 } from 'lucide-react';
 import { adminService } from '../services/adminService';
+import { bookingService } from '../services/bookingService';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { normalizeRole, getRoleDisplayName } from '../services/authService';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const AdminDashboardPage = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const initialTab = searchParams.get('tab') || 'overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
 
@@ -56,11 +55,11 @@ const AdminDashboardPage = () => {
   const loadAllAdminData = async () => {
     setLoading(true);
     try {
-      const [statsData, usersData, machineryData, bookingsData, activityData, marketData] = await Promise.all([
+      const [statsData, usersData, machineryData, sharedBookings, activityData, marketData] = await Promise.all([
         adminService.getStats(),
         adminService.getUsers(),
         adminService.getMachinery(),
-        adminService.getBookings(),
+        bookingService.getBookings(), // Reads shared source
         adminService.getActivityLogs(),
         adminService.getMarketOverview()
       ]);
@@ -68,7 +67,7 @@ const AdminDashboardPage = () => {
       if (statsData) setStats(statsData);
       if (Array.isArray(usersData)) setUsersList(usersData);
       if (Array.isArray(machineryData)) setMachineryList(machineryData);
-      if (Array.isArray(bookingsData)) setBookingsList(bookingsData);
+      if (Array.isArray(sharedBookings)) setBookingsList(sharedBookings);
       if (activityData) setActivityLogs(activityData);
       if (Array.isArray(marketData)) setMarketSummary(marketData);
     } catch (err) {
@@ -80,7 +79,17 @@ const AdminDashboardPage = () => {
 
   useEffect(() => {
     loadAllAdminData();
+
+    // Listen to shared booking updates
+    const handleUpdate = () => loadAllAdminData();
+    window.addEventListener('agro_smart_bookings_updated', handleUpdate);
+    return () => window.removeEventListener('agro_smart_bookings_updated', handleUpdate);
   }, []);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
 
   const triggerToast = (msg, type = 'success') => {
     setNotification({ msg, type });
@@ -90,7 +99,7 @@ const AdminDashboardPage = () => {
   // User Actions
   const handleToggleUserStatus = async (userId) => {
     try {
-      const res = await adminService.toggleUserStatus(userId);
+      await adminService.toggleUserStatus(userId);
       setUsersList(prev => prev.map(u => u.id === userId ? { ...u, status: u.status === 'Active' ? 'Disabled' : 'Active' } : u));
       triggerToast('User status updated successfully.');
     } catch (err) {
@@ -99,11 +108,17 @@ const AdminDashboardPage = () => {
   };
 
   const handleChangeUserRole = async (userId, currentRole) => {
-    const newRole = currentRole === 'Farmer' ? 'Machinery Owner' : 'Farmer';
+    const norm = normalizeRole(currentRole);
+    const newRole = norm === 'farmer' ? 'machine_owner' : 'farmer';
     try {
       await adminService.updateUserRole(userId, newRole);
-      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, user_type: newRole, avatar: newRole === 'Machinery Owner' ? '🚜' : '👨‍🌾' } : u));
-      triggerToast(`User role updated to ${newRole}.`);
+      setUsersList(prev => prev.map(u => u.id === userId ? { 
+        ...u, 
+        role: newRole, 
+        user_type: getRoleDisplayName(newRole),
+        avatar: newRole === 'machine_owner' ? '🚜' : '👨‍🌾' 
+      } : u));
+      triggerToast(`User role updated to ${getRoleDisplayName(newRole)}.`);
     } catch (err) {
       triggerToast(err.message || 'Failed to update role.', 'error');
     }
@@ -133,21 +148,25 @@ const AdminDashboardPage = () => {
 
   // Filtered Users
   const filteredUsers = usersList.filter(u => {
-    const matchesRole = userFilterRole === 'All' || u.user_type === userFilterRole;
+    const norm = normalizeRole(u.role || u.user_type);
+    const matchesRole = userFilterRole === 'All' || 
+      (userFilterRole === 'Farmer' && norm === 'farmer') ||
+      (userFilterRole === 'Machinery Owner' && norm === 'machine_owner') ||
+      (userFilterRole === 'Admin' && norm === 'admin');
     const matchesSearch = !userSearch || 
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.phone.includes(userSearch);
+      (u.name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+      (u.phone || '').includes(userSearch);
     return matchesRole && matchesSearch;
   });
 
   // Filtered Machinery
   const filteredMachinery = machineryList.filter(m => {
     return !machineSearch ||
-      m.machine_name.toLowerCase().includes(machineSearch.toLowerCase()) ||
-      m.machine_type.toLowerCase().includes(machineSearch.toLowerCase()) ||
-      m.owner_name?.toLowerCase().includes(machineSearch.toLowerCase()) ||
-      m.location?.toLowerCase().includes(machineSearch.toLowerCase());
+      (m.machine_name || '').toLowerCase().includes(machineSearch.toLowerCase()) ||
+      (m.machine_type || '').toLowerCase().includes(machineSearch.toLowerCase()) ||
+      (m.owner_name || '').toLowerCase().includes(machineSearch.toLowerCase()) ||
+      (m.location || '').toLowerCase().includes(machineSearch.toLowerCase());
   });
 
   return (
@@ -198,7 +217,7 @@ const AdminDashboardPage = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
           <span className="badge-pill badge-amber" style={{ fontSize: '0.75rem' }}>
-            <Sparkles size={12} /> Demo Authentication Mode
+            <Sparkles size={12} /> Demo Mode
           </span>
           <button
             type="button"
@@ -257,7 +276,7 @@ const AdminDashboardPage = () => {
           { id: 'overview', label: 'Platform Overview', icon: Layers },
           { id: 'users', label: `User Management (${usersList.length})`, icon: Users },
           { id: 'machinery', label: `Machinery Moderation (${machineryList.length})`, icon: Tractor },
-          { id: 'bookings', label: `Rental Bookings (${bookingsList.length})`, icon: CalendarCheck },
+          { id: 'bookings', label: `All Rental Bookings (${bookingsList.length})`, icon: CalendarCheck },
           { id: 'activity', label: 'Telemetry & Activity', icon: ScanSearch },
           { id: 'market', label: 'Market Intelligence', icon: TrendingUp }
         ].map((tab) => {
@@ -267,7 +286,7 @@ const AdminDashboardPage = () => {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -280,8 +299,7 @@ const AdminDashboardPage = () => {
                 fontWeight: isActive ? 700 : 500,
                 fontSize: '0.88rem',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease'
+                whiteSpace: 'nowrap'
               }}
             >
               <Icon size={16} />
@@ -307,10 +325,10 @@ const AdminDashboardPage = () => {
                 <Users size={18} style={{ color: 'var(--primary-700)' }} />
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-heading)' }}>
-                {stats?.total_users || usersList.length}
+                {usersList.length}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                {stats?.farmers_count || 1} Farmers • {stats?.owners_count || 1} Owners
+                {usersList.filter(u => normalizeRole(u.role || u.user_type) === 'farmer').length} Farmers • {usersList.filter(u => normalizeRole(u.role || u.user_type) === 'machine_owner').length} Owners
               </div>
             </div>
 
@@ -320,10 +338,10 @@ const AdminDashboardPage = () => {
                 <Tractor size={18} style={{ color: '#b45309' }} />
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-heading)' }}>
-                {stats?.total_listings || machineryList.length}
+                {machineryList.length}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--primary-700)', marginTop: '0.2rem' }}>
-                {stats?.active_listings || machineryList.length} Available Listings
+                {machineryList.filter(m => m.availability === 'Available' || m.availability === 'Available Now').length} Active Listings
               </div>
             </div>
 
@@ -333,10 +351,10 @@ const AdminDashboardPage = () => {
                 <CalendarCheck size={18} style={{ color: '#0369a1' }} />
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-heading)' }}>
-                {stats?.total_bookings || bookingsList.length}
+                {bookingsList.length}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                {bookingsList.filter(b => b.status === 'Accepted' || b.status === 'Confirmed').length} Confirmed
+                {bookingsList.filter(b => b.status === 'PENDING').length} Pending • {bookingsList.filter(b => b.status === 'ACCEPTED').length} Accepted
               </div>
             </div>
 
@@ -346,25 +364,12 @@ const AdminDashboardPage = () => {
                 <ScanSearch size={18} style={{ color: '#15803d' }} />
               </div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-heading)' }}>
-                {(stats?.total_scans || 0) + (stats?.total_weather_checks || 0)}
+                {(activityLogs.disease_scans?.length || 0) + (activityLogs.weather_checks?.length || 0)}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>
-                {activityLogs.disease_scans.length} Scans • {activityLogs.weather_checks.length} Weather Checks
+                {activityLogs.disease_scans?.length || 0} Scans • {activityLogs.weather_checks?.length || 0} Weather Checks
               </div>
             </div>
-          </div>
-
-          {/* Quick System Architecture Note */}
-          <div className="glass-card" style={{ background: '#f8faf7', border: '1px solid var(--border-green)', marginBottom: '1.75rem' }}>
-            <h3 style={{ fontSize: '1.05rem', color: 'var(--text-heading)', margin: '0 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <ShieldCheck size={18} style={{ color: 'var(--primary-700)' }} />
-              Admin Security & Role Boundary Constraints
-            </h3>
-            <ul style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              <li><strong>Zero Self-Promotion:</strong> Public registration is strictly limited to Farmers and Machinery Owners. No public user can register as Admin.</li>
-              <li><strong>Demo Mode Integrity:</strong> All statistics and telemetry reflect live in-memory stores and local session persistence.</li>
-              <li><strong>Future Supabase Auth:</strong> Admin role checks use standardized RBAC ready for Supabase JWT claims integration.</li>
-            </ul>
           </div>
         </div>
       )}
@@ -382,7 +387,6 @@ const AdminDashboardPage = () => {
               </p>
             </div>
 
-            {/* Filter controls */}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <input
                 type="text"
@@ -406,7 +410,6 @@ const AdminDashboardPage = () => {
             </div>
           </div>
 
-          {/* Users Table */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.86rem' }}>
               <thead>
@@ -420,69 +423,68 @@ const AdminDashboardPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((u) => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '0.75rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '1.2rem' }}>{u.avatar || '👤'}</span>
-                        <div>
-                          <strong style={{ color: 'var(--text-heading)', display: 'block' }}>{u.name}</strong>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>ID: {u.id}</span>
+                {filteredUsers.map((u) => {
+                  const normRole = normalizeRole(u.role || u.user_type);
+                  return (
+                    <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '1.2rem' }}>{u.avatar || (normRole === 'admin' ? '🛡️' : normRole === 'machine_owner' ? '🚜' : '👨‍🌾')}</span>
+                          <div>
+                            <strong style={{ color: 'var(--text-heading)', display: 'block' }}>{u.name}</strong>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>ID: {u.id}</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-heading)' }}>{u.phone}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{u.email}</div>
-                    </td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <span className={`badge-pill ${
-                        u.user_type === 'Admin' 
-                          ? 'badge-red' 
-                          : u.user_type === 'Machinery Owner' 
-                          ? 'badge-amber' 
-                          : 'badge-emerald'
-                      }`}>
-                        {u.user_type}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>
-                      {u.district}, {u.state}
-                    </td>
-                    <td style={{ padding: '0.75rem' }}>
-                      <span className={`badge-pill ${u.status === 'Active' ? 'badge-emerald' : 'badge-red'}`}>
-                        {u.status === 'Active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                        {u.status || 'Active'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                      {u.user_type !== 'Admin' ? (
-                        <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => handleChangeUserRole(u.id, u.user_type)}
-                            style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem' }}
-                            title={`Switch to ${u.user_type === 'Farmer' ? 'Machinery Owner' : 'Farmer'}`}
-                          >
-                            Switch Role
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => handleToggleUserStatus(u.id)}
-                            style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem', color: u.status === 'Active' ? '#991b1b' : '#15803d' }}
-                          >
-                            {u.status === 'Active' ? <UserX size={13} /> : <UserCheck size={13} />}
-                            <span>{u.status === 'Active' ? 'Disable' : 'Enable'}</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>Protected</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ padding: '0.75rem' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-heading)' }}>{u.phone}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{u.email}</div>
+                      </td>
+                      <td style={{ padding: '0.75rem' }}>
+                        <span className={`badge-pill ${
+                          normRole === 'admin' ? 'badge-red' : normRole === 'machine_owner' ? 'badge-amber' : 'badge-emerald'
+                        }`}>
+                          {getRoleDisplayName(normRole)}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>
+                        {u.district}, {u.state}
+                      </td>
+                      <td style={{ padding: '0.75rem' }}>
+                        <span className={`badge-pill ${u.status === 'Active' ? 'badge-emerald' : 'badge-red'}`}>
+                          {u.status === 'Active' ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                          {u.status || 'Active'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                        {normRole !== 'admin' ? (
+                          <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => handleChangeUserRole(u.id, normRole)}
+                              style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem' }}
+                              title={`Switch to ${normRole === 'farmer' ? 'Machinery Owner' : 'Farmer'}`}
+                            >
+                              Switch Role
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => handleToggleUserStatus(u.id)}
+                              style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem', color: u.status === 'Active' ? '#991b1b' : '#15803d' }}
+                            >
+                              {u.status === 'Active' ? <UserX size={13} /> : <UserCheck size={13} />}
+                              <span>{u.status === 'Active' ? 'Disable' : 'Enable'}</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>Protected Admin</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -594,7 +596,7 @@ const AdminDashboardPage = () => {
       {activeTab === 'bookings' && (
         <div className="glass-card">
           <h3 style={{ fontSize: '1.2rem', color: 'var(--text-heading)', margin: '0 0 1rem 0' }}>
-            All Rental Bookings & Farmer Transactions
+            All Shared Rental Bookings (Synchronized)
           </h3>
 
           <div style={{ overflowX: 'auto' }}>
@@ -605,8 +607,8 @@ const AdminDashboardPage = () => {
                   <th style={{ padding: '0.75rem' }}>Farmer</th>
                   <th style={{ padding: '0.75rem' }}>Machinery</th>
                   <th style={{ padding: '0.75rem' }}>Owner</th>
-                  <th style={{ padding: '0.75rem' }}>Date & Hours</th>
-                  <th style={{ padding: '0.75rem' }}>Estimated Cost</th>
+                  <th style={{ padding: '0.75rem' }}>Date & Duration</th>
+                  <th style={{ padding: '0.75rem' }}>Total Cost</th>
                   <th style={{ padding: '0.75rem' }}>Status</th>
                 </tr>
               </thead>
@@ -618,7 +620,7 @@ const AdminDashboardPage = () => {
                     </td>
                     <td style={{ padding: '0.75rem' }}>
                       <div style={{ fontWeight: 600, color: 'var(--text-heading)' }}>{b.farmer_name}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{b.phone}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{b.farmer_phone || b.phone}</div>
                     </td>
                     <td style={{ padding: '0.75rem', color: 'var(--text-heading)' }}>
                       {b.machine_name}
@@ -628,16 +630,16 @@ const AdminDashboardPage = () => {
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{b.owner_phone}</div>
                     </td>
                     <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>
-                      {b.booking_date} ({b.estimated_hours} hrs)
+                      {b.booking_date} ({b.duration || b.estimated_hours} hrs)
                     </td>
                     <td style={{ padding: '0.75rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-                      ₹{b.total_estimated_cost || (b.price_per_hour * b.estimated_hours)}
+                      ₹{b.total_estimated_cost || b.estimated_cost}
                     </td>
                     <td style={{ padding: '0.75rem' }}>
                       <span className={`badge-pill ${
-                        b.status === 'Accepted' || b.status === 'Confirmed' 
+                        b.status === 'ACCEPTED' || b.status === 'COMPLETED'
                           ? 'badge-emerald' 
-                          : b.status === 'Rejected' 
+                          : b.status === 'CANCELLED' || b.status === 'REJECTED'
                           ? 'badge-red' 
                           : 'badge-amber'
                       }`}>
@@ -655,19 +657,18 @@ const AdminDashboardPage = () => {
       {/* Tab 5: Activity & Telemetry */}
       {activeTab === 'activity' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
-          {/* Disease Scans Log */}
           <div className="glass-card">
             <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <ScanSearch size={18} style={{ color: 'var(--primary-700)' }} />
               Recent Disease Scans Log
             </h3>
-            {activityLogs.disease_scans.length === 0 ? (
+            {activityLogs.disease_scans?.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
                 No recent scans in memory.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {activityLogs.disease_scans.slice(0, 8).map((s, idx) => (
+                {activityLogs.disease_scans?.slice(0, 8).map((s, idx) => (
                   <div key={idx} style={{ background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
                       <span className="badge-pill badge-emerald" style={{ fontSize: '0.7rem' }}>{s.crop || s.crop_name}</span>
@@ -676,35 +677,28 @@ const AdminDashboardPage = () => {
                     <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)', display: 'block' }}>
                       {s.disease || s.detected_disease}
                     </strong>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                      Severity: {s.severity} • {s.is_demo ? 'Demo Analysis' : 'Live AI'}
-                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Weather Checks Log */}
           <div className="glass-card">
             <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <CloudSunRain size={18} style={{ color: '#0369a1' }} />
               Recent Agro Weather Checks
             </h3>
-            {activityLogs.weather_checks.length === 0 ? (
+            {activityLogs.weather_checks?.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
                 No weather queries recorded yet.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {activityLogs.weather_checks.slice(0, 8).map((w, idx) => (
+                {activityLogs.weather_checks?.slice(0, 8).map((w, idx) => (
                   <div key={idx} style={{ background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
                       <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)' }}>{w.location}</strong>
                       <span className="badge-pill badge-emerald" style={{ fontSize: '0.68rem' }}>{w.crop}</span>
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {w.temperature}°C • {w.weather_condition} (Risk: {w.risk_level})
                     </div>
                   </div>
                 ))}
@@ -714,7 +708,7 @@ const AdminDashboardPage = () => {
         </div>
       )}
 
-      {/* Tab 6: Market Intelligence Overview */}
+      {/* Tab 6: Market Intelligence */}
       {activeTab === 'market' && (
         <div className="glass-card">
           <h3 style={{ fontSize: '1.2rem', color: 'var(--text-heading)', margin: '0 0 1rem 0' }}>
@@ -732,7 +726,7 @@ const AdminDashboardPage = () => {
                   ₹{m.avg_modal_price}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                  Avg Modal Rate per Quintal across active trading hubs
+                  Avg Modal Rate per Quintal
                 </div>
               </div>
             ))}

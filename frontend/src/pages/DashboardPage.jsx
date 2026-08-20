@@ -10,169 +10,118 @@ import {
   CheckCircle, 
   AlertTriangle, 
   ShieldCheck, 
-  Plus, 
-  Layers, 
-  Calendar, 
   MapPin, 
   Phone, 
-  DollarSign, 
   Sparkles, 
   ArrowRight, 
-  FileText, 
   Check, 
   X, 
-  Info,
-  ChevronRight,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  CalendarCheck,
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { bookingService } from '../services/bookingService';
 import { diseaseService } from '../services/diseaseService';
-import { machineryService } from '../services/machineryService';
 import { weatherService } from '../services/weatherService';
 import { marketService } from '../services/marketService';
-import { formatCurrency } from '../utils/formatters';
 import Modal from '../components/Modal';
 
 const DashboardPage = () => {
-  const { user, logout, isFarmer, isMachineryOwner } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isUnauthorized = location.state?.unauthorized;
 
   // Activity States
   const [recentScans, setRecentScans] = useState([]);
-  const [bookingsList, setBookingsList] = useState([]);
+  const [farmerBookings, setFarmerBookings] = useState([]);
   const [weatherAlert, setWeatherAlert] = useState(null);
   const [marketTrends, setMarketTrends] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [bookingFilterStatus, setBookingFilterStatus] = useState('ALL');
+  const [loading, setLoading] = useState(true);
 
-  // Machinery Owner Fleet State
-  const [ownerEquipment, setOwnerEquipment] = useState([]);
-  const [isAddMachineModalOpen, setIsAddMachineModalOpen] = useState(false);
-  const [newMachine, setNewMachine] = useState({
-    name: '',
-    type: 'Tractor',
-    pricePerHour: 850,
-    location: `${user?.district || 'Pune'}, ${user?.state || 'Maharashtra'}`,
-    specs: '55 HP, 4WD, Power Steering',
-    phone: user?.phone || '9876543211'
-  });
+  // Cancel Booking Modal State
+  const [cancelModalBooking, setCancelModalBooking] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const loadFarmerData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch Farmer Bookings from shared service
+      const allBookings = await bookingService.getBookings();
+      // Filter for this farmer
+      const myBookings = allBookings.filter(b => 
+        (user?.id && b.farmer_id === user.id) ||
+        (user?.phone && (b.farmer_phone === user.phone || b.phone === user.phone)) ||
+        (!user?.id && (b.farmer_phone === '9876543210' || b.farmer_id === 'usr-demo-farmer-01'))
+      );
+      setFarmerBookings(myBookings);
+
+      // 2. Fetch Disease Scans
+      diseaseService.getHistory().then((data) => {
+        if (Array.isArray(data)) setRecentScans(data.slice(0, 5));
+      });
+
+      // 3. Fetch Agro Weather
+      const locationQuery = `${user?.district || 'Patna'}, ${user?.state || 'Bihar'}`;
+      weatherService.getWeatherRisk(locationQuery, 'Tomato').then((data) => {
+        if (data) setWeatherAlert(data);
+      });
+
+      // 4. Fetch Market Prices
+      marketService.getCropPrices('Tomato').then((data) => {
+        if (data && data.mandis) setMarketTrends(data.mandis.slice(0, 3));
+      });
+    } catch (err) {
+      console.warn('[FarmerDashboard] Data load notice:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // 1. Fetch Disease Scans
-    diseaseService.getHistory().then((data) => {
-      if (Array.isArray(data)) setRecentScans(data.slice(0, 5));
-    });
+    loadFarmerData();
 
-    // 2. Fetch Machinery Bookings
-    machineryService.getBookings().then((data) => {
-      if (Array.isArray(data)) setBookingsList(data);
-    });
-
-    // 3. Fetch Agro Weather for user location
-    const locationQuery = `${user?.district || 'Pune'}, ${user?.state || 'Maharashtra'}`;
-    weatherService.getWeatherRisk(locationQuery, 'Tomato').then((data) => {
-      if (data) setWeatherAlert(data);
-    });
-
-    // 4. Fetch Market Prices
-    marketService.getCropPrices('Tomato').then((data) => {
-      if (data && data.mandis) setMarketTrends(data.mandis.slice(0, 3));
-    });
-
-    // 5. Initial Owner Equipment (Demo Fleet)
-    if (user?.user_type === 'Machinery Owner') {
-      machineryService.getListings({ location: user.district }).then((listings) => {
-        if (Array.isArray(listings) && listings.length > 0) {
-          setOwnerEquipment(listings.slice(0, 3));
-        } else {
-          setOwnerEquipment([
-            {
-              id: 'eq-owner-1',
-              machine_name: 'Mahindra 575 DI Tractor (50 HP)',
-              machine_type: 'Tractor',
-              price_per_hour: 800,
-              location: `${user?.district || 'Pune'}, ${user?.state || 'Maharashtra'}`,
-              availability: 'Available',
-              owner_name: user?.name || 'Suresh Singh',
-              owner_phone: user?.phone || '9876543211',
-              image_url: 'https://images.unsplash.com/photo-1592861956120-e524fc739696?w=600&auto=format&fit=crop&q=80'
-            },
-            {
-              id: 'eq-owner-2',
-              machine_name: 'Fieldking Heavy Rotary Tiller / Rotavator',
-              machine_type: 'Rotavator',
-              price_per_hour: 550,
-              location: `${user?.district || 'Pune'}, ${user?.state || 'Maharashtra'}`,
-              availability: 'Available',
-              owner_name: user?.name || 'Suresh Singh',
-              owner_phone: user?.phone || '9876543211',
-              image_url: 'https://images.unsplash.com/photo-1594771804886-a933bb2d609b?w=600&auto=format&fit=crop&q=80'
-            }
-          ]);
-        }
-      });
-    }
+    // Live synchronization listener
+    const handleUpdate = () => loadFarmerData();
+    window.addEventListener('agro_smart_bookings_updated', handleUpdate);
+    return () => window.removeEventListener('agro_smart_bookings_updated', handleUpdate);
   }, [user]);
 
-  const handleToggleAvailability = (eqId) => {
-    setOwnerEquipment((prev) =>
-      prev.map((item) =>
-        item.id === eqId
-          ? { ...item, availability: item.availability === 'Available' ? 'In Maintenance' : 'Available' }
-          : item
-      )
-    );
-  };
-
-  const handleAddEquipmentSubmit = (e) => {
-    e.preventDefault();
-    if (!newMachine.name) return;
-
-    const created = {
-      id: `eq-custom-${Date.now()}`,
-      machine_name: newMachine.name,
-      machine_type: newMachine.type,
-      price_per_hour: Number(newMachine.pricePerHour),
-      location: newMachine.location,
-      availability: 'Available',
-      owner_name: user?.name || 'Farm Equipment Owner',
-      owner_phone: newMachine.phone,
-      specs: newMachine.specs,
-      image_url: 'https://images.unsplash.com/photo-1592861956120-e524fc739696?w=600&auto=format&fit=crop&q=80'
-    };
-
-    setOwnerEquipment([created, ...ownerEquipment]);
-    setIsAddMachineModalOpen(false);
-    setNewMachine({
-      name: '',
-      type: 'Tractor',
-      pricePerHour: 850,
-      location: `${user?.district || 'Pune'}, ${user?.state || 'Maharashtra'}`,
-      specs: '',
-      phone: user?.phone || ''
-    });
-  };
-
-  const handleBookingAction = async (bookingId, newStatus) => {
+  const handleConfirmCancel = async () => {
+    if (!cancelModalBooking) return;
+    setIsCancelling(true);
     try {
-      await machineryService.updateBookingStatus(bookingId, newStatus);
-      setBookingsList((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, status: newStatus } : b))
-      );
-    } catch {
-      // Local demo fallback state update
-      setBookingsList((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, status: newStatus } : b))
-      );
+      await bookingService.cancelBooking(cancelModalBooking.id);
+      showToast('Booking cancelled successfully.');
+      setCancelModalBooking(null);
+      loadFarmerData();
+    } catch (err) {
+      showToast(err.message || 'Failed to cancel booking.', 'error');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
+  // Filtered Bookings
+  const filteredBookings = farmerBookings.filter(b => {
+    if (bookingFilterStatus === 'ALL') return true;
+    return b.status === bookingFilterStatus;
+  });
+
   return (
-    <div className="page-wrapper container">
+    <div className="page-wrapper container" style={{ maxWidth: '1200px' }}>
       
-      {/* Unauthorized Access Notification */}
+      {/* Unauthorized Access Notification Banner */}
       {isUnauthorized && (
         <div style={{
           background: '#fef2f2',
@@ -188,7 +137,7 @@ const DashboardPage = () => {
         }}>
           <AlertCircle size={20} style={{ flexShrink: 0 }} />
           <div>
-            <strong>Access Restricted:</strong> Administrator credentials are required to view the AGRO-SMART Admin Console. You have been redirected to your personal dashboard.
+            <strong>Access Restricted:</strong> You do not have permissions for that console. You have been redirected to your personal dashboard.
           </div>
         </div>
       )}
@@ -199,7 +148,7 @@ const DashboardPage = () => {
         border: '1px solid var(--border-green)',
         borderRadius: 'var(--radius-md)',
         padding: '1.75rem',
-        marginBottom: '2rem',
+        marginBottom: '1.75rem',
         boxShadow: 'var(--shadow-sm)',
         display: 'flex',
         alignItems: 'center',
@@ -226,29 +175,35 @@ const DashboardPage = () => {
               <h1 style={{ fontSize: '1.65rem', margin: 0, color: 'var(--text-heading)', fontWeight: 800 }}>
                 Welcome, {user?.name || 'Farmer'}!
               </h1>
-              <span className={`badge-pill ${user?.user_type === 'Machinery Owner' ? 'badge-amber' : 'badge-emerald'}`}>
-                {user?.user_type === 'Machinery Owner' ? <Tractor size={12} /> : <User size={12} />}
-                {user?.user_type || 'Farmer'}
+              <span className="badge-pill badge-emerald">
+                <User size={12} /> Farmer Portal
               </span>
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <MapPin size={14} style={{ color: 'var(--primary-700)' }} />
-                {user?.district}, {user?.state}
+                {user?.district || 'Patna'}, {user?.state || 'Bihar'}
               </span>
               <span>•</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <Phone size={14} />
-                {user?.phone}
+                {user?.phone || '9876543210'}
               </span>
             </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span className="badge-pill badge-emerald" style={{ fontSize: '0.75rem' }}>
-            <ShieldCheck size={13} /> Active Demo Session
-          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={loadFarmerData}
+            title="Refresh Data"
+            style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-pulse' : ''} />
+            <span>Refresh</span>
+          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -264,6 +219,25 @@ const DashboardPage = () => {
         </div>
       </div>
 
+      {/* Toast Alert */}
+      {toast && (
+        <div style={{
+          background: toast.type === 'error' ? '#fef2f2' : '#f0fdf4',
+          border: `1px solid ${toast.type === 'error' ? '#fecaca' : 'var(--border-green)'}`,
+          color: toast.type === 'error' ? '#991b1b' : 'var(--primary-900)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '0.75rem 1rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.85rem'
+        }}>
+          {toast.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
       {/* Quick Action Shortcuts Bar */}
       <div style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', marginBottom: '0.85rem', fontWeight: 700 }}>
@@ -274,253 +248,172 @@ const DashboardPage = () => {
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: '1rem'
         }}>
-          
-          <Link
-            to="/disease-detection"
-            className="glass-card"
-            style={{
-              textDecoration: 'none',
-              padding: '1.15rem 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-              border: '1px solid var(--border-subtle)'
-            }}
-          >
-            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-700)', flexShrink: 0 }}>
+          <Link to="/disease-detection" className="glass-card" style={{ textDecoration: 'none', padding: '1.15rem 1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-700)' }}>
               <ScanSearch size={22} />
             </div>
             <div>
               <strong style={{ display: 'block', color: 'var(--text-heading)', fontSize: '0.95rem' }}>Scan Crop Leaf</strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Identify foliar diseases & advice</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Identify foliar diseases</span>
             </div>
           </Link>
 
-          <Link
-            to="/weather-intelligence"
-            className="glass-card"
-            style={{
-              textDecoration: 'none',
-              padding: '1.15rem 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-              border: '1px solid var(--border-subtle)'
-            }}
-          >
-            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1', flexShrink: 0 }}>
+          <Link to="/weather-intelligence" className="glass-card" style={{ textDecoration: 'none', padding: '1.15rem 1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1' }}>
               <CloudSunRain size={22} />
             </div>
             <div>
               <strong style={{ display: 'block', color: 'var(--text-heading)', fontSize: '0.95rem' }}>Agro Weather</strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Hazards, spray & harvest advisory</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Hazards & spray advisory</span>
             </div>
           </Link>
 
-          <Link
-            to="/machinery-rental"
-            className="glass-card"
-            style={{
-              textDecoration: 'none',
-              padding: '1.15rem 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-              border: '1px solid var(--border-subtle)'
-            }}
-          >
-            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309', flexShrink: 0 }}>
+          <Link to="/machinery-rental" className="glass-card" style={{ textDecoration: 'none', padding: '1.15rem 1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
               <Tractor size={22} />
             </div>
             <div>
-              <strong style={{ display: 'block', color: 'var(--text-heading)', fontSize: '0.95rem' }}>Find Machinery</strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tractors, harvesters & rotavators</span>
+              <strong style={{ display: 'block', color: 'var(--text-heading)', fontSize: '0.95rem' }}>Rent Machinery</strong>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Tractors, tillers & harvesters</span>
             </div>
           </Link>
 
-          <Link
-            to="/market-intelligence"
-            className="glass-card"
-            style={{
-              textDecoration: 'none',
-              padding: '1.15rem 1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.85rem',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-              border: '1px solid var(--border-subtle)'
-            }}
-          >
-            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#15803d', flexShrink: 0 }}>
+          <Link to="/market-intelligence" className="glass-card" style={{ textDecoration: 'none', padding: '1.15rem 1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#15803d' }}>
               <TrendingUp size={22} />
             </div>
             <div>
               <strong style={{ display: 'block', color: 'var(--text-heading)', fontSize: '0.95rem' }}>Mandi Prices</strong>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Live modal rates & best sell window</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Live rates & best sell window</span>
             </div>
           </Link>
-
         </div>
       </div>
 
-      {/* Machinery Owner Fleet Management Panel (If Machinery Owner) */}
-      {isMachineryOwner && (
-        <div className="glass-card" style={{ marginBottom: '2.5rem', border: '2px solid var(--border-green)', background: '#f8faf7' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Tractor size={20} style={{ color: 'var(--primary-700)' }} />
-                My Machinery & Equipment Fleet
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', margin: '0.2rem 0 0 0' }}>
-                Manage listings, toggle real-time availability, and process incoming rental requests
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setIsAddMachineModalOpen(true)}
-              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-            >
-              <Plus size={16} />
-              <span>Add Equipment</span>
-            </button>
+      {/* Main Section: My Machinery Bookings */}
+      <div className="glass-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <CalendarCheck size={20} style={{ color: 'var(--primary-700)' }} />
+              My Machinery Bookings ({farmerBookings.length})
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: '0.15rem 0 0 0' }}>
+              Live status updates synchronized with machinery owners
+            </p>
           </div>
 
-          {/* Owner Equipment Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            {ownerEquipment.map((eq) => (
+          {/* Status Filter Buttons */}
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            {['ALL', 'PENDING', 'ACCEPTED', 'COMPLETED', 'CANCELLED', 'REJECTED'].map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setBookingFilterStatus(st)}
+                style={{
+                  padding: '0.3rem 0.65rem',
+                  fontSize: '0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: bookingFilterStatus === st ? '1px solid var(--primary-700)' : '1px solid var(--border-subtle)',
+                  background: bookingFilterStatus === st ? 'var(--primary-100)' : '#ffffff',
+                  color: bookingFilterStatus === st ? 'var(--primary-900)' : 'var(--text-muted)',
+                  fontWeight: bookingFilterStatus === st ? 700 : 500,
+                  cursor: 'pointer'
+                }}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredBookings.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-dim)' }}>
+            <Tractor size={36} style={{ color: 'var(--border-subtle)', margin: '0 auto 0.5rem auto' }} />
+            <div style={{ fontSize: '0.9rem' }}>No machinery bookings found in this view.</div>
+            <Link to="/machinery-rental" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: '0.85rem', padding: '0.4rem 0.9rem', fontSize: '0.82rem' }}>
+              Browse Available Machinery
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            {filteredBookings.map((b) => (
               <div
-                key={eq.id}
+                key={b.id}
                 style={{
                   background: '#ffffff',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-sm)',
-                  padding: '1rem',
+                  padding: '1.15rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <span className="badge-pill badge-emerald" style={{ fontSize: '0.7rem' }}>{eq.machine_type}</span>
-                  <span className={`badge-pill ${eq.availability === 'Available' ? 'badge-emerald' : 'badge-amber'}`} style={{ fontSize: '0.7rem' }}>
-                    {eq.availability}
-                  </span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <strong style={{ fontSize: '1.05rem', color: 'var(--text-heading)' }}>
+                      {b.machine_name}
+                    </strong>
+                    <span className={`badge-pill ${
+                      b.status === 'ACCEPTED' ? 'badge-emerald' :
+                      b.status === 'COMPLETED' ? 'badge-emerald' :
+                      b.status === 'PENDING' ? 'badge-amber' :
+                      b.status === 'CANCELLED' ? 'badge-red' : 'badge-red'
+                    }`} style={{ fontSize: '0.72rem' }}>
+                      {b.status}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '0.84rem', color: 'var(--text-heading)', marginBottom: '0.2rem' }}>
+                    Equipment Owner: <strong>{b.owner_name}</strong> • Contact: {b.owner_phone}
+                  </div>
+
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                    Booking Date: <strong>{b.booking_date}</strong> • Start: {b.start_time} • Duration: {b.duration || b.estimated_hours} hrs • Location: {b.service_location}
+                  </div>
                 </div>
-                <strong style={{ fontSize: '0.98rem', color: 'var(--text-heading)', display: 'block', marginBottom: '0.25rem' }}>
-                  {eq.machine_name}
-                </strong>
-                <div style={{ fontSize: '0.85rem', color: 'var(--primary-800)', fontWeight: 700, marginBottom: '0.4rem' }}>
-                  ₹{eq.price_per_hour} / hr
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-800)' }}>
+                      ₹{b.total_estimated_cost || b.estimated_cost}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Estimated Total</div>
+                  </div>
+
+                  {/* Cancel Button if PENDING or ACCEPTED */}
+                  {(b.status === 'PENDING' || b.status === 'ACCEPTED') && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setCancelModalBooking(b)}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', color: '#991b1b' }}
+                    >
+                      <XCircle size={14} />
+                      <span>Cancel</span>
+                    </button>
+                  )}
                 </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: '0.75rem' }}>
-                  Location: {eq.location}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => handleToggleAvailability(eq.id)}
-                  style={{ width: '100%', fontSize: '0.78rem', padding: '0.35rem', justifyContent: 'center' }}
-                >
-                  Toggle Availability ({eq.availability === 'Available' ? 'Mark Busy' : 'Mark Available'})
-                </button>
               </div>
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Incoming Bookings Table for Owner */}
-          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
-            <h4 style={{ fontSize: '1rem', color: 'var(--text-heading)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Clock size={16} style={{ color: 'var(--primary-700)' }} />
-              Incoming Equipment Booking Requests ({bookingsList.length})
-            </h4>
-
-            {bookingsList.length === 0 ? (
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1.5rem' }}>
-                No active booking requests yet.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                {bookingsList.map((b) => (
-                  <div
-                    key={b.id}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '0.75rem 1rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '0.75rem'
-                    }}
-                  >
-                    <div>
-                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)' }}>
-                        {b.machine_name} ({b.farmer_name})
-                      </strong>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-                        Date: {b.booking_date} • {b.estimated_hours} hrs • Total: ₹{b.total_estimated_cost || (b.price_per_hour * b.estimated_hours)} • Phone: {b.phone}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className={`badge-pill ${
-                        b.status === 'Confirmed' || b.status === 'Accepted'
-                          ? 'badge-emerald'
-                          : b.status === 'Rejected' || b.status === 'Cancelled'
-                          ? 'badge-red'
-                          : 'badge-amber'
-                      }`}>
-                        {b.status}
-                      </span>
-
-                      {b.status === 'Pending' && (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => handleBookingAction(b.id, 'Confirmed')}
-                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
-                            title="Accept Booking"
-                          >
-                            <Check size={14} /> Accept
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => handleBookingAction(b.id, 'Rejected')}
-                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', color: '#991b1b' }}
-                            title="Reject Booking"
-                          >
-                            <X size={14} /> Reject
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Main Two-Column Activity Dashboard */}
+      {/* Two Column Grid: Weather & Recent Scans */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.75rem' }}>
         
-        {/* Left Column: Recent Disease Scans & Weather Alert */}
+        {/* Left: Weather Alert */}
         <div>
-          {/* Weather Alert Banner */}
           {weatherAlert && (
-            <div className="glass-card" style={{ marginBottom: '1.5rem', background: '#f0fdf4', border: '1px solid var(--border-green)' }}>
+            <div className="glass-card" style={{ background: '#f0fdf4', border: '1px solid var(--border-green)', marginBottom: '1.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                 <span className="badge-pill badge-emerald" style={{ fontSize: '0.72rem' }}>
-                  Hyperlocal Weather
+                  Hyperlocal Weather Advisory
                 </span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
                   {weatherAlert.location}
@@ -543,118 +436,12 @@ const DashboardPage = () => {
             </div>
           )}
 
-          {/* Recent Disease Scans Card */}
-          <div className="glass-card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <ScanSearch size={17} style={{ color: 'var(--primary-700)' }} />
-                Recent Disease Scans
-              </h3>
-              <Link to="/disease-detection" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-700)', textDecoration: 'none' }}>
-                New Scan →
-              </Link>
-            </div>
-
-            {recentScans.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-                No scans recorded yet. Try scanning a crop leaf!
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {recentScans.map((scan, idx) => (
-                  <div
-                    key={scan.id || idx}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '0.75rem 0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.15rem' }}>
-                        <span className="badge-pill badge-emerald" style={{ fontSize: '0.68rem' }}>{scan.crop || scan.crop_name}</span>
-                        <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)' }}>{scan.disease || scan.detected_disease}</strong>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                        Severity: {scan.severity} • {scan.timestamp || 'Recent'}
-                      </div>
-                    </div>
-                    <span className="badge-pill badge-amber" style={{ fontSize: '0.68rem' }}>
-                      Demo Result
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Machinery Bookings & Market Intelligence */}
-        <div>
-          {/* Farmer's Machinery Bookings */}
-          <div className="glass-card" style={{ marginBottom: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Tractor size={17} style={{ color: 'var(--primary-700)' }} />
-                My Farm Machinery Bookings
-              </h3>
-              <Link to="/machinery-rental" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-700)', textDecoration: 'none' }}>
-                Rent Machinery →
-              </Link>
-            </div>
-
-            {bookingsList.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-                No machinery booked yet. Browse local tractors and tillers!
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {bookingsList.slice(0, 4).map((b) => (
-                  <div
-                    key={b.id}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '0.75rem 0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    <div>
-                      <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)', display: 'block' }}>
-                        {b.machine_name}
-                      </strong>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                        Date: {b.booking_date} • {b.estimated_hours} hrs • ₹{b.total_estimated_cost || (b.price_per_hour * b.estimated_hours)}
-                      </div>
-                    </div>
-                    <span className={`badge-pill ${
-                      b.status === 'Confirmed' || b.status === 'Accepted'
-                        ? 'badge-emerald'
-                        : 'badge-amber'
-                    }`} style={{ fontSize: '0.7rem' }}>
-                      {b.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Mandi Price Watch */}
           <div className="glass-card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <TrendingUp size={17} style={{ color: 'var(--primary-700)' }} />
-                Regional Mandi Price Watch (Tomato)
+                Mandi Price Watch (Tomato)
               </h3>
               <Link to="/market-intelligence" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-700)', textDecoration: 'none' }}>
                 Full Trends →
@@ -691,96 +478,95 @@ const DashboardPage = () => {
           </div>
         </div>
 
+        {/* Right: Recent Disease Scans */}
+        <div>
+          <div className="glass-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <ScanSearch size={17} style={{ color: 'var(--primary-700)' }} />
+                Recent Disease Scans
+              </h3>
+              <Link to="/disease-detection" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-700)', textDecoration: 'none' }}>
+                New Scan →
+              </Link>
+            </div>
+
+            {recentScans.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                No scans recorded yet. Upload a crop leaf to identify foliar diseases!
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {recentScans.map((scan, idx) => (
+                  <div
+                    key={scan.id || idx}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem 0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.15rem' }}>
+                        <span className="badge-pill badge-emerald" style={{ fontSize: '0.68rem' }}>{scan.crop || scan.crop_name}</span>
+                        <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)' }}>{scan.disease || scan.detected_disease}</strong>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                        Severity: {scan.severity} • {scan.timestamp || 'Recent'}
+                      </div>
+                    </div>
+                    <span className="badge-pill badge-amber" style={{ fontSize: '0.68rem' }}>
+                      Demo Result
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
-      {/* Add Machinery Listing Modal for Machinery Owners */}
-      {isAddMachineModalOpen && (
+      {/* Cancel Booking Confirmation Modal */}
+      {cancelModalBooking && (
         <Modal
-          isOpen={isAddMachineModalOpen}
-          onClose={() => setIsAddMachineModalOpen(false)}
-          title="Add New Farm Machinery to Fleet"
+          isOpen={!!cancelModalBooking}
+          onClose={() => setCancelModalBooking(null)}
+          title="Confirm Booking Cancellation"
         >
-          <form onSubmit={handleAddEquipmentSubmit}>
-            <div className="form-group">
-              <label className="form-label">Machine Name / Model *</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. John Deere 5050 D Tractor (50 HP)"
-                value={newMachine.name}
-                onChange={(e) => setNewMachine({ ...newMachine, name: e.target.value })}
-                required
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Machine Category *</label>
-                <select
-                  className="form-control"
-                  value={newMachine.type}
-                  onChange={(e) => setNewMachine({ ...newMachine, type: e.target.value })}
-                >
-                  <option value="Tractor">Tractor</option>
-                  <option value="Harvester">Harvester</option>
-                  <option value="Rotavator">Rotavator</option>
-                  <option value="Cultivator">Cultivator</option>
-                  <option value="Seed Drill">Seed Drill</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Hourly Rental Rate (₹) *</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={newMachine.pricePerHour}
-                  onChange={(e) => setNewMachine({ ...newMachine, pricePerHour: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Operating Location *</label>
-              <input
-                type="text"
-                className="form-control"
-                value={newMachine.location}
-                onChange={(e) => setNewMachine({ ...newMachine, location: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Key Specifications</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. 50 HP, 4WD, Multi-Speed PTO"
-                value={newMachine.specs}
-                onChange={(e) => setNewMachine({ ...newMachine, specs: e.target.value })}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+          <div style={{ padding: '0.5rem 0' }}>
+            <p style={{ fontSize: '0.92rem', color: 'var(--text-heading)', margin: '0 0 1rem 0' }}>
+              Are you sure you want to cancel your booking for <strong>{cancelModalBooking.machine_name}</strong> on <strong>{cancelModalBooking.booking_date}</strong>?
+            </p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: '0 0 1.5rem 0' }}>
+              The equipment owner will be notified immediately of this cancellation.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={isCancelling}
+                onClick={() => setCancelModalBooking(null)}
                 style={{ flex: 1, justifyContent: 'center' }}
-                onClick={() => setIsAddMachineModalOpen(false)}
               >
-                Cancel
+                Keep Booking
               </button>
               <button
-                type="submit"
+                type="button"
                 className="btn btn-primary"
-                style={{ flex: 1, justifyContent: 'center' }}
+                disabled={isCancelling}
+                onClick={handleConfirmCancel}
+                style={{ flex: 1, justifyContent: 'center', background: '#dc2626', borderColor: '#dc2626' }}
               >
-                Save Equipment
+                {isCancelling ? 'Cancelling...' : 'Yes, Cancel Booking'}
               </button>
             </div>
-          </form>
+          </div>
         </Modal>
       )}
 

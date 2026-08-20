@@ -18,16 +18,18 @@ import {
   Sparkles,
   ShieldCheck,
   Users,
-  Layers
+  Layers,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getRoleDisplayName } from '../services/authService';
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   
-  const { user, isAuthenticated, isAdmin, logout } = useAuth();
+  const { user, isAuthenticated, role, isFarmer, isMachineryOwner, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
   // Close dropdown on outside click
@@ -54,6 +56,12 @@ const Navbar = () => {
     setUserDropdownOpen(false);
     setMobileMenuOpen(false);
     navigate('/');
+  };
+
+  const getDashboardPath = () => {
+    if (isAdmin) return '/admin/dashboard';
+    if (isMachineryOwner) return '/owner/dashboard';
+    return '/dashboard';
   };
 
   return (
@@ -91,7 +99,7 @@ const Navbar = () => {
         </nav>
 
         {/* Auth Profile / Login Button on Desktop */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           {isAuthenticated && user ? (
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
@@ -100,18 +108,18 @@ const Navbar = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem',
+                  gap: '0.45rem',
                   padding: '0.4rem 0.75rem',
                   borderRadius: 'var(--radius-sm)',
-                  border: `1px solid ${isAdmin ? '#fca5a5' : 'var(--border-green)'}`,
+                  border: `1px solid ${isAdmin ? '#fca5a5' : isMachineryOwner ? '#fde68a' : 'var(--border-green)'}`,
                   background: '#ffffff',
                   cursor: 'pointer',
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <span style={{ fontSize: '1.1rem' }}>{user.avatar || (isAdmin ? '🛡️' : '👨‍🌾')}</span>
+                <span style={{ fontSize: '1.1rem' }}>{user.avatar || (isAdmin ? '🛡️' : isMachineryOwner ? '🚜' : '👨‍🌾')}</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-                  {isAdmin ? 'Admin' : user.name.split(' ')[0]}
+                  {user.name ? user.name.split(' ')[0] : 'User'}
                 </span>
                 <ChevronDown size={14} style={{ color: 'var(--text-dim)' }} />
               </button>
@@ -134,79 +142,94 @@ const Navbar = () => {
                     <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-heading)' }}>
                       {user.name}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: isAdmin ? '#991b1b' : 'var(--primary-700)', fontWeight: 600 }}>
-                      {user.user_type} • {user.district}
+                    <div style={{ fontSize: '0.72rem', color: isAdmin ? '#991b1b' : isMachineryOwner ? '#b45309' : 'var(--primary-700)', fontWeight: 600 }}>
+                      {getRoleDisplayName(user.role)} • {user.district || 'India'}
                     </div>
                   </div>
 
-                  {isAdmin ? (
+                  {/* ADMIN LINKS */}
+                  {isAdmin && (
                     <>
                       <Link
-                        to="/admin"
+                        to="/admin/dashboard"
                         onClick={() => setUserDropdownOpen(false)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.6rem',
-                          padding: '0.6rem 1rem',
-                          fontSize: '0.84rem',
-                          color: 'var(--text-heading)',
-                          textDecoration: 'none',
-                          fontWeight: 600
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none', fontWeight: 600 }}
                       >
                         <ShieldCheck size={15} style={{ color: '#991b1b' }} />
-                        <span>Admin Console</span>
+                        <span>Admin Dashboard</span>
+                      </Link>
+                      <Link
+                        to="/admin/dashboard?tab=users"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
+                      >
+                        <Users size={15} style={{ color: '#991b1b' }} />
+                        <span>User Management</span>
+                      </Link>
+                      <Link
+                        to="/admin/dashboard?tab=bookings"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
+                      >
+                        <CalendarCheck size={15} style={{ color: '#991b1b' }} />
+                        <span>All Bookings</span>
                       </Link>
                     </>
-                  ) : (
+                  )}
+
+                  {/* MACHINERY OWNER LINKS */}
+                  {isMachineryOwner && (
+                    <>
+                      <Link
+                        to="/owner/dashboard"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        <Tractor size={15} style={{ color: '#b45309' }} />
+                        <span>Owner Dashboard</span>
+                      </Link>
+                      <Link
+                        to="/owner/dashboard?tab=requests"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
+                      >
+                        <CalendarCheck size={15} style={{ color: '#b45309' }} />
+                        <span>Booking Requests</span>
+                      </Link>
+                      <Link
+                        to="/owner/dashboard?tab=machinery"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
+                      >
+                        <Layers size={15} style={{ color: '#b45309' }} />
+                        <span>My Machinery Fleet</span>
+                      </Link>
+                    </>
+                  )}
+
+                  {/* FARMER LINKS */}
+                  {isFarmer && (
                     <>
                       <Link
                         to="/dashboard"
                         onClick={() => setUserDropdownOpen(false)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.6rem',
-                          padding: '0.6rem 1rem',
-                          fontSize: '0.84rem',
-                          color: 'var(--text-heading)',
-                          textDecoration: 'none'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none', fontWeight: 600 }}
                       >
                         <LayoutDashboard size={15} style={{ color: 'var(--primary-700)' }} />
-                        <span>Dashboard</span>
+                        <span>Farmer Dashboard</span>
                       </Link>
-
                       <Link
                         to="/machinery-rental"
                         onClick={() => setUserDropdownOpen(false)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.6rem',
-                          padding: '0.6rem 1rem',
-                          fontSize: '0.84rem',
-                          color: 'var(--text-heading)',
-                          textDecoration: 'none'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
                       >
                         <CalendarCheck size={15} style={{ color: 'var(--primary-700)' }} />
                         <span>My Bookings</span>
                       </Link>
-
                       <Link
                         to="/disease-detection"
                         onClick={() => setUserDropdownOpen(false)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.6rem',
-                          padding: '0.6rem 1rem',
-                          fontSize: '0.84rem',
-                          color: 'var(--text-heading)',
-                          textDecoration: 'none'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
                       >
                         <History size={15} style={{ color: 'var(--primary-700)' }} />
                         <span>Scan History</span>
@@ -240,14 +263,24 @@ const Navbar = () => {
               )}
             </div>
           ) : (
-            <Link
-              to="/login"
-              className="btn btn-primary"
-              style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-            >
-              <LogIn size={15} />
-              <span>Login</span>
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Link
+                to="/login"
+                className="btn btn-primary"
+                style={{ padding: '0.42rem 0.85rem', fontSize: '0.82rem' }}
+              >
+                <LogIn size={14} />
+                <span>Login</span>
+              </Link>
+              <Link
+                to="/register"
+                className="btn btn-secondary"
+                style={{ padding: '0.42rem 0.85rem', fontSize: '0.82rem' }}
+              >
+                <UserPlus size={14} />
+                <span>Register</span>
+              </Link>
+            </div>
           )}
 
           {/* Mobile Hamburger Button */}
@@ -267,7 +300,7 @@ const Navbar = () => {
           <div style={{ padding: '0.8rem 1rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: '0.5rem' }}>
             <div style={{ fontWeight: 700, color: 'var(--text-heading)' }}>{user.name}</div>
             <div style={{ fontSize: '0.78rem', color: isAdmin ? '#991b1b' : 'var(--primary-700)' }}>
-              {user.user_type} • {user.district}
+              {getRoleDisplayName(user.role)} • {user.district || 'India'}
             </div>
           </div>
         )}
@@ -291,27 +324,15 @@ const Navbar = () => {
 
         {isAuthenticated ? (
           <>
-            {isAdmin ? (
-              <NavLink
-                to="/admin"
-                className="nav-link"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{ padding: '0.8rem 1rem', color: '#991b1b', fontWeight: 700 }}
-              >
-                <ShieldCheck size={18} />
-                <span>Admin Console</span>
-              </NavLink>
-            ) : (
-              <NavLink
-                to="/dashboard"
-                className="nav-link"
-                onClick={() => setMobileMenuOpen(false)}
-                style={{ padding: '0.8rem 1rem' }}
-              >
-                <LayoutDashboard size={18} />
-                <span>Dashboard</span>
-              </NavLink>
-            )}
+            <NavLink
+              to={getDashboardPath()}
+              className="nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{ padding: '0.8rem 1rem', fontWeight: 600 }}
+            >
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </NavLink>
             <button
               type="button"
               onClick={handleLogoutClick}
@@ -323,15 +344,26 @@ const Navbar = () => {
             </button>
           </>
         ) : (
-          <NavLink
-            to="/login"
-            className="nav-link"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{ padding: '0.8rem 1rem', color: 'var(--primary-700)', fontWeight: 700 }}
-          >
-            <LogIn size={18} />
-            <span>Login to AGRO-SMART</span>
-          </NavLink>
+          <div style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <NavLink
+              to="/login"
+              className="nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{ color: 'var(--primary-700)', fontWeight: 700 }}
+            >
+              <LogIn size={18} />
+              <span>Sign In</span>
+            </NavLink>
+            <NavLink
+              to="/register"
+              className="nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{ fontWeight: 600 }}
+            >
+              <UserPlus size={18} />
+              <span>Create Account</span>
+            </NavLink>
+          </div>
         )}
       </div>
     </header>
