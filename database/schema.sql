@@ -10,20 +10,20 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS crops (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL UNIQUE,
-    category VARCHAR(50) NOT NULL, -- Cereal, Pulse, Vegetable, Fruit, Cash Crop
+    category VARCHAR(50) NOT NULL,
     optimal_temp_min NUMERIC(4,1),
     optimal_temp_max NUMERIC(4,1),
     optimal_humidity_min NUMERIC(4,1),
     optimal_humidity_max NUMERIC(4,1),
-    water_requirement VARCHAR(50), -- Low, Moderate, High
-    growing_season VARCHAR(50),    -- Kharif, Rabi, Zaid, Perennial
+    water_requirement VARCHAR(50),
+    growing_season VARCHAR(50),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 2. DISEASE SCANS TABLE (AI Crop Disease Detection History)
 CREATE TABLE IF NOT EXISTS disease_scans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID, -- Nullable for anonymous/farmer scans
+    user_id UUID,
     crop_name VARCHAR(100) NOT NULL,
     image_url TEXT,
     detected_disease VARCHAR(150) NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS disease_scans (
 -- 3. WEATHER CHECKS TABLE (Crop-Specific Risk Assessment Log)
 CREATE TABLE IF NOT EXISTS weather_checks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID, -- Nullable for anonymous/farmer scans
+    user_id UUID,
     crop_name VARCHAR(100) NOT NULL,
     location VARCHAR(150) NOT NULL,
     temperature NUMERIC(4,1),
@@ -52,59 +52,43 @@ CREATE TABLE IF NOT EXISTS weather_checks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. CROP DISEASE DIAGNOSIS MASTER KNOWLEDGE TABLE
-CREATE TABLE IF NOT EXISTS crop_diagnoses (
+-- 4. FARM MACHINERY MASTER TABLE (Uber for Tractors Marketplace)
+CREATE TABLE IF NOT EXISTS machinery (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    crop_name VARCHAR(100) NOT NULL,
-    disease_name VARCHAR(150) NOT NULL,
-    scientific_name VARCHAR(150),
-    confidence_score NUMERIC(5,2) NOT NULL,
-    severity VARCHAR(20) CHECK (severity IN ('None', 'Low', 'Moderate', 'Severe', 'Critical')),
-    symptoms TEXT,
-    chemical_treatment TEXT,
-    organic_treatment TEXT,
-    preventive_measures TEXT,
-    regional_explanation TEXT,
-    image_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 5. FARM MACHINERY LISTINGS
-CREATE TABLE IF NOT EXISTS machinery_listings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(150) NOT NULL,
-    category VARCHAR(50) NOT NULL, -- Tractor, Harvester, Drone, Tillage, Sowing, Sprayer
-    model_year INT,
-    horse_power INT,
-    price_per_hour NUMERIC(10,2) NOT NULL,
-    price_per_day NUMERIC(10,2),
-    location_city VARCHAR(100) NOT NULL,
-    location_state VARCHAR(100) NOT NULL,
-    distance_km NUMERIC(5,1) DEFAULT 0.0,
     owner_name VARCHAR(150) NOT NULL,
     owner_phone VARCHAR(20) NOT NULL,
+    machine_name VARCHAR(150) NOT NULL,
+    machine_type VARCHAR(50) NOT NULL CHECK (machine_type IN ('Tractor', 'Harvester', 'Rotavator', 'Cultivator', 'Seed Drill', 'Drone Sprayer')),
+    horse_power INT DEFAULT 45,
+    price_per_hour NUMERIC(10,2) NOT NULL,
+    price_per_day NUMERIC(10,2),
     rating NUMERIC(2,1) DEFAULT 4.8,
-    is_available BOOLEAN DEFAULT TRUE,
-    image_url TEXT,
-    specs JSONB DEFAULT '{}'::jsonb,
+    reviews_count INT DEFAULT 18,
+    latitude NUMERIC(10,6),
+    longitude NUMERIC(10,6),
+    location VARCHAR(150) NOT NULL,
+    distance_km NUMERIC(5,1) DEFAULT 2.5,
+    availability VARCHAR(30) DEFAULT 'Available Now',
+    features JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. MACHINERY BOOKINGS
+-- 5. FARM MACHINERY BOOKINGS TABLE
 CREATE TABLE IF NOT EXISTS machinery_bookings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    machinery_id UUID REFERENCES machinery_listings(id) ON DELETE CASCADE,
+    machinery_id UUID REFERENCES machinery(id) ON DELETE CASCADE,
     farmer_name VARCHAR(150) NOT NULL,
-    farmer_phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    service_location VARCHAR(200) NOT NULL,
     booking_date DATE NOT NULL,
-    duration_hours INT NOT NULL,
-    acres_to_cover NUMERIC(6,2),
-    total_amount NUMERIC(10,2) NOT NULL,
-    status VARCHAR(30) DEFAULT 'Confirmed' CHECK (status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled')),
+    start_time VARCHAR(20) NOT NULL,
+    estimated_hours NUMERIC(4,1) NOT NULL,
+    estimated_cost NUMERIC(10,2) NOT NULL,
+    status VARCHAR(30) DEFAULT 'Accepted' CHECK (status IN ('Pending', 'Accepted', 'Completed', 'Cancelled')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 7. MANDI / APMC MARKET COMMODITY PRICES
+-- 6. MANDI / APMC MARKET COMMODITY PRICES
 CREATE TABLE IF NOT EXISTS market_prices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     commodity VARCHAR(100) NOT NULL,
@@ -137,10 +121,15 @@ VALUES
 ('Corn', 'Cereal', 18.0, 30.0, 50.0, 80.0, 'Moderate', 'Kharif')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed Sample Weather Check
-INSERT INTO weather_checks (crop_name, location, temperature, humidity, rain_chance, risk_level, concern, recommendation)
+-- Seed Farm Machinery Listings
+INSERT INTO machinery (owner_name, owner_phone, machine_name, machine_type, horse_power, price_per_hour, price_per_day, rating, reviews_count, location, distance_km, availability, features)
 VALUES
-('Tomato', 'Patna, Bihar', 32.0, 68.0, 70.0, 'MODERATE',
-'High humidity + rainfall may increase fungal disease risk.',
-'Monitor leaves closely and avoid irrigation before rainfall.')
+('Rajesh Patil', '+91 98234 11201', 'Mahindra 575 DI Power Plus', 'Tractor', 47, 700.00, 4900.00, 4.8, 34, 'Pune Rural, Maharashtra', 2.5, 'Available Now', '["Power Steering", "Rotavator Ready", "Dual Clutch", "Low Fuel Burn"]'::jsonb),
+('Suresh Kulkarni', '+91 97654 88312', 'John Deere 5310 4WD Heavy Duty', 'Tractor', 55, 850.00, 5800.00, 4.9, 48, 'Baramati, Maharashtra', 6.2, 'Available Now', '["4-Wheel Drive", "Heavy Cultivation", "AC Cabin", "Laser Leveler Ready"]'::jsonb),
+('Manoj Kumar Singh', '+91 94310 22345', 'Swaraj 855 FE Heavy Duty Tractor', 'Tractor', 52, 650.00, 4500.00, 4.7, 28, 'Patna Rural, Bihar', 3.8, 'Available Now', '["Multi-Speed PTO", "High Torque", "Plough Compatible"]'::jsonb),
+('Gurmeet Singh', '+91 94220 54321', 'Preet 987 Self-Propelled Multi-Crop', 'Harvester', 101, 1600.00, 11000.00, 4.9, 29, 'Karnal, Haryana', 8.5, 'Available Now', '["14ft Cutter Bar", "Paddy & Wheat Specialist", "Straw Chopper Included"]'::jsonb),
+('Harpreet Gill', '+91 98140 77654', 'Claas Crop Tiger 30 Grain Harvester', 'Harvester', 75, 1800.00, 12500.00, 4.8, 19, 'Ludhiana, Punjab', 12.0, 'Available Now', '["Rubber Tracks for Wet Soil", "High Grain Recovery", "Low Grain Loss"]'::jsonb),
+('Vikas Shinde', '+91 98601 99887', 'Shaktiman Semi-Champion 7-Feet', 'Rotavator', 50, 350.00, 2400.00, 4.8, 22, 'Ahmednagar, Maharashtra', 4.5, 'Available Now', '["48 Boron Steel Blades", "205cm Working Width", "Multi-Speed Gearbox"]'::jsonb),
+('Rameshwar Yadav', '+91 94302 88123', 'Fieldking Heavy Duty 9-Tyne Rigid', 'Cultivator', 45, 300.00, 2000.00, 4.7, 16, 'Patna, Bihar', 5.0, 'Available Now', '["9 Forged Tynes", "Zero Soil Compaction", "High Penetration"]'::jsonb),
+('Babanrao Patil', '+91 94231 66778', 'National Automatic Seed-Cum-Fertilizer Drill', 'Seed Drill', 45, 400.00, 2800.00, 4.9, 25, 'Agra, Uttar Pradesh', 9.2, 'Available Now', '["9-Row Sowing", "Simultaneous Fertilizer Metering", "Zero-Till Adaptable"]'::jsonb)
 ON CONFLICT DO NOTHING;
