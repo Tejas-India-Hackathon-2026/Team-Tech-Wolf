@@ -1,100 +1,280 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ScanSearch, 
   Upload, 
   AlertTriangle, 
   ShieldAlert, 
   Leaf, 
-  FlaskConical, 
   RefreshCw, 
   CheckSquare, 
   Info,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  FileCheck,
+  XCircle,
+  Clock,
+  History,
+  ShieldCheck,
+  ChevronRight,
+  AlertCircle
 } from 'lucide-react';
 import { diseaseService } from '../services/diseaseService';
 
-const SAMPLE_CROPS = ['Tomato', 'Wheat', 'Potato', 'Rice (Paddy)', 'Cotton', 'Corn'];
+const SUPPORTED_CROPS = ['Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn'];
+const MAX_FILE_SIZE_MB = 10;
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/bmp'];
+
+// Curated crop sample previews for interactive one-click testing
+const SAMPLE_PREVIEWS = {
+  Tomato: 'https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80',
+  Potato: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600&auto=format&fit=crop&q=80',
+  Rice: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=600&auto=format&fit=crop&q=80',
+  Wheat: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=600&auto=format&fit=crop&q=80',
+  Cotton: 'https://images.unsplash.com/photo-1606041008023-472dfb5e530f?w=600&auto=format&fit=crop&q=80',
+  Corn: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=600&auto=format&fit=crop&q=80'
+};
 
 const DiseaseDetectionPage = () => {
   const [selectedCrop, setSelectedCrop] = useState('Tomato');
-  const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [fileDetails, setFileDetails] = useState(null);
+  
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [diagnosisResult, setDiagnosisResult] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [historyList, setHistoryList] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load history on mount
+  useEffect(() => {
+    diseaseService.getHistory().then((data) => {
+      if (Array.isArray(data)) setHistoryList(data);
+    });
+  }, []);
 
   const handleImageChange = (e) => {
+    setErrorMessage(null);
     const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-      setDiagnosisResult(null);
+    if (!file) return;
+
+    // Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setErrorMessage(`Unsupported file format (${file.type || 'Unknown'}). Please upload a JPG, PNG, or WEBP image.`);
+      return;
     }
+
+    // Validate file size (10 MB limit)
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > MAX_FILE_SIZE_MB) {
+      setErrorMessage(`File is too large (${fileSizeMB.toFixed(1)} MB). Maximum allowed size is ${MAX_FILE_SIZE_MB} MB.`);
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setFileDetails({
+      name: file.name,
+      size: `${fileSizeMB.toFixed(2)} MB`,
+      type: file.type.split('/')[1]?.toUpperCase() || 'IMAGE'
+    });
+    setDiagnosisResult(null);
   };
 
   const handleSampleClick = (cropName) => {
     setSelectedCrop(cropName);
-    setImagePreview(`https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80`);
+    setErrorMessage(null);
     setImageFile(null);
+    setImagePreview(SAMPLE_PREVIEWS[cropName] || SAMPLE_PREVIEWS.Tomato);
+    setFileDetails({
+      name: `${cropName.toLowerCase()}_field_sample.jpg`,
+      size: '1.2 MB',
+      type: 'SAMPLE'
+    });
     setDiagnosisResult(null);
   };
 
-  const runDiagnosis = async () => {
+  const runAnalysis = async () => {
+    if (!imagePreview && !imageFile) {
+      setErrorMessage('Please upload a leaf photo or pick a sample crop image first.');
+      return;
+    }
+
+    setErrorMessage(null);
     setIsAnalyzing(true);
+
     try {
       let payload;
       if (imageFile) {
-        const fd = new FormData();
-        fd.append('image', imageFile);
-        fd.append('crop', selectedCrop);
-        payload = fd;
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        formData.append('crop', selectedCrop);
+        payload = formData;
       } else {
-        payload = { crop: selectedCrop, filename: `${selectedCrop.toLowerCase()}_sample_leaf.jpg` };
+        payload = {
+          crop: selectedCrop,
+          filename: `${selectedCrop.toLowerCase()}_sample_leaf.jpg`
+        };
       }
 
-      const res = await diseaseService.diagnose(payload);
+      const res = await diseaseService.analyze(payload);
       setDiagnosisResult(res);
+
+      // Refresh history
+      diseaseService.getHistory().then((data) => {
+        if (Array.isArray(data)) setHistoryList(data);
+      });
+
     } catch (err) {
-      console.error(err);
+      setErrorMessage(err.message || 'An unexpected error occurred during disease analysis. Please check your connection and retry.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const resetScanner = () => {
-    setImagePreview(null);
+  const resetUpload = () => {
     setImageFile(null);
+    setImagePreview(null);
+    setFileDetails(null);
     setDiagnosisResult(null);
+    setErrorMessage(null);
   };
 
   return (
     <div className="page-wrapper container">
       {/* Header Banner */}
       <div style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
-          <span className="badge-pill badge-emerald">
-            <ScanSearch size={14} /> Service 1 of 4
-          </span>
-          <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Computer Vision Diagnostic Engine</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span className="badge-pill badge-emerald">
+              <ScanSearch size={14} /> AI Diagnostic Pillar
+            </span>
+            <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>Computer Vision & Pathology Engine</span>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem' }}
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <History size={14} style={{ color: 'var(--primary-700)' }} />
+            <span>{showHistory ? 'Hide Scan History' : `Scan History (${historyList.length})`}</span>
+          </button>
         </div>
-        <h1 style={{ fontSize: '2.2rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>AI Crop Disease Detection</h1>
+
+        <h1 style={{ fontSize: '2.2rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>
+          AI Crop Disease Detection
+        </h1>
         <p style={{ color: 'var(--text-muted)', maxWidth: '680px' }}>
-          Upload a clear photo of an infected leaf. Our neural pathology model analyzes lesions, discoloration patterns, and chlorosis to return instant diagnosis with dual chemical and organic treatment protocols.
+          Follow the 4-step workflow: <strong>Upload Leaf Image → AI Analyzes → Get Actionable Advice → Receive Treatment Protocols</strong>.
         </p>
       </div>
 
+      {/* Workflow Step Indicator */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '0.75rem',
+        marginBottom: '2rem',
+        background: '#ffffff',
+        padding: '0.85rem 1.25rem',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-sm)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary-700)', color: '#ffffff', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>Select Crop & Image</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: isAnalyzing ? 'var(--accent-amber)' : 'var(--primary-100)', color: isAnalyzing ? '#ffffff' : 'var(--primary-800)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: isAnalyzing ? 'var(--accent-amber)' : 'var(--text-muted)' }}>AI Analyzes</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: diagnosisResult ? 'var(--primary-700)' : 'var(--primary-100)', color: diagnosisResult ? '#ffffff' : 'var(--primary-800)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: diagnosisResult ? 'var(--primary-700)' : 'var(--text-muted)' }}>Get Advice</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: diagnosisResult ? 'var(--primary-700)' : 'var(--primary-100)', color: diagnosisResult ? '#ffffff' : 'var(--primary-800)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: diagnosisResult ? 'var(--primary-700)' : 'var(--text-muted)' }}>Receive Results</span>
+        </div>
+      </div>
+
+      {/* Error Alert Banner */}
+      {errorMessage && (
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: 'var(--radius-sm)',
+          padding: '0.85rem 1rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          color: '#991b1b',
+          fontSize: '0.88rem'
+        }}>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} style={{ color: '#991b1b' }}>
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* History Drawer */}
+      {showHistory && (
+        <div className="glass-card" style={{ marginBottom: '2rem', background: '#f8faf7', border: '1px solid var(--border-green)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.1rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Clock size={16} style={{ color: 'var(--primary-700)' }} />
+              Recent Field Diagnosis History (Supabase Log)
+            </h3>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Showing last {historyList.length} scans</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.85rem' }}>
+            {historyList.map((item, idx) => (
+              <div 
+                key={item.id || idx}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem 1rem',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
+                  <span className="badge-pill badge-emerald" style={{ fontSize: '0.7rem' }}>{item.crop || item.crop_name}</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary-700)' }}>{item.confidence}%</span>
+                </div>
+                <strong style={{ fontSize: '0.92rem', color: 'var(--text-heading)', display: 'block', marginBottom: '0.25rem' }}>
+                  {item.disease || item.detected_disease}
+                </strong>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                  Severity: {item.severity} • {item.timestamp || 'Recorded'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Upload Column vs Results Column */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem', alignItems: 'start' }}>
         
-        {/* Left Column: Upload & Configuration Card */}
+        {/* Left Column: User Inputs */}
         <div className="glass-card">
           <h3 style={{ fontSize: '1.2rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-heading)' }}>
             <Leaf size={18} style={{ color: 'var(--primary-700)' }} />
-            1. Select Target Crop & Upload Leaf
+            Step 1: Select Crop & Upload Leaf Photo
           </h3>
 
-          {/* Crop Selector */}
+          {/* 1. Crop Selector */}
           <div className="form-group">
-            <label className="form-label">Select Crop Type</label>
+            <label className="form-label">1. Select Target Crop</label>
             <select 
               className="form-control" 
               value={selectedCrop} 
@@ -103,26 +283,30 @@ const DiseaseDetectionPage = () => {
                 setDiagnosisResult(null);
               }}
             >
-              {SAMPLE_CROPS.map((c) => (
+              {SUPPORTED_CROPS.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
 
-          {/* Upload Area */}
+          {/* 2. Image Upload Box */}
           <div className="form-group">
-            <label className="form-label">Crop Leaf Photo</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <label className="form-label" style={{ margin: 0 }}>2. Upload Leaf / Plant Photo</label>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Max 10MB (JPG, PNG, WEBP)</span>
+            </div>
+
             <div 
               style={{
                 border: '2px dashed #86efac',
                 borderRadius: 'var(--radius-md)',
-                padding: '2rem 1.5rem',
+                padding: '1.75rem 1.5rem',
                 textAlign: 'center',
                 background: '#f0fdf4',
                 position: 'relative',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                minHeight: '200px',
+                minHeight: '210px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -133,7 +317,7 @@ const DiseaseDetectionPage = () => {
               <input 
                 id="leaf-upload-input" 
                 type="file" 
-                accept="image/*" 
+                accept="image/jpeg,image/png,image/webp,image/jpg" 
                 style={{ display: 'none' }} 
                 onChange={handleImageChange}
               />
@@ -143,11 +327,21 @@ const DiseaseDetectionPage = () => {
                   <img 
                     src={imagePreview} 
                     alt="Leaf Preview" 
-                    style={{ maxHeight: '180px', maxWidth: '100%', borderRadius: 'var(--radius-sm)', objectFit: 'contain', margin: '0 auto', boxShadow: 'var(--shadow-sm)' }} 
+                    style={{ 
+                      maxHeight: '170px', 
+                      maxWidth: '100%', 
+                      borderRadius: 'var(--radius-sm)', 
+                      objectFit: 'contain', 
+                      margin: '0 auto', 
+                      boxShadow: 'var(--shadow-sm)' 
+                    }} 
                   />
-                  <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--primary-800)', fontWeight: 600 }}>
-                    ✓ Image Loaded. Click to replace or run diagnosis below.
-                  </div>
+                  {fileDetails && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.82rem', color: 'var(--primary-900)', background: 'var(--primary-100)', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)' }}>
+                      <FileCheck size={14} style={{ color: 'var(--primary-700)' }} />
+                      <span>{fileDetails.name} ({fileDetails.size})</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -165,10 +359,10 @@ const DiseaseDetectionPage = () => {
                     <Upload size={22} />
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem', color: 'var(--text-heading)' }}>
-                    Click or Drag & Drop Leaf Image
+                    Click or Drag & Drop Leaf Photo
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                    Supports JPG, PNG, WEBP (Max 10MB)
+                    Capture high-resolution leaf spots or foliar lesions
                   </div>
                 </>
               )}
@@ -178,10 +372,10 @@ const DiseaseDetectionPage = () => {
           {/* Quick Demo Sample Selector */}
           <div style={{ marginBottom: '1.5rem' }}>
             <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-              Or test with preset crop templates:
+              Or quick-test with verified field crop samples:
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {['Tomato', 'Wheat', 'Potato', 'Rice (Paddy)'].map((cp) => (
+            <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+              {SUPPORTED_CROPS.map((cp) => (
                 <button
                   key={cp}
                   type="button"
@@ -190,10 +384,10 @@ const DiseaseDetectionPage = () => {
                     fontSize: '0.78rem',
                     padding: '0.35rem 0.65rem',
                     borderRadius: 'var(--radius-sm)',
-                    background: selectedCrop === cp ? 'var(--primary-100)' : '#ffffff',
-                    color: selectedCrop === cp ? 'var(--primary-800)' : 'var(--text-muted)',
-                    border: `1px solid ${selectedCrop === cp ? 'var(--primary-400)' : 'var(--border-subtle)'}`,
-                    fontWeight: selectedCrop === cp ? 600 : 400
+                    background: selectedCrop === cp && !imageFile ? 'var(--primary-100)' : '#ffffff',
+                    color: selectedCrop === cp && !imageFile ? 'var(--primary-800)' : 'var(--text-muted)',
+                    border: `1px solid ${selectedCrop === cp && !imageFile ? 'var(--primary-400)' : 'var(--border-subtle)'}`,
+                    fontWeight: selectedCrop === cp && !imageFile ? 700 : 500
                   }}
                 >
                   {cp} Sample
@@ -206,19 +400,19 @@ const DiseaseDetectionPage = () => {
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button
               className="btn btn-primary"
-              style={{ flex: 1 }}
-              onClick={runDiagnosis}
+              style={{ flex: 1, padding: '0.85rem 1.25rem' }}
+              onClick={runAnalysis}
               disabled={isAnalyzing}
             >
               {isAnalyzing ? (
                 <>
                   <RefreshCw size={16} className="animate-pulse" />
-                  <span>Scanning Pathology...</span>
+                  <span>Analyzing Pathology...</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={16} />
-                  <span>Run AI Diagnosis</span>
+                  <span>Analyze Crop</span>
                 </>
               )}
             </button>
@@ -226,16 +420,16 @@ const DiseaseDetectionPage = () => {
             {imagePreview && (
               <button
                 className="btn btn-secondary"
-                onClick={resetScanner}
-                title="Reset Image"
+                onClick={resetUpload}
+                title="Clear Image"
               >
-                <RefreshCw size={16} />
+                <XCircle size={16} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Right Column: Diagnosis Results */}
+        {/* Right Column: AI Analysis Results */}
         <div>
           {isAnalyzing && (
             <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
@@ -252,9 +446,11 @@ const DiseaseDetectionPage = () => {
               }}>
                 <ScanSearch size={32} className="animate-pulse" />
               </div>
-              <h3 style={{ fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>AI Pathology Analysis in Progress</h3>
+              <h3 style={{ fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>
+                Pathology Model Analyzing {selectedCrop} Leaf...
+              </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '420px', margin: '0 auto' }}>
-                Analyzing spectral chlorophyll absorption, lesion border necrosis, and fungal hyphae morphology...
+                Evaluating lesion concentricity, chlorotic borders, fungal mycelium structures, and severity rating...
               </p>
             </div>
           )}
@@ -274,10 +470,26 @@ const DiseaseDetectionPage = () => {
               }}>
                 <Info size={30} />
               </div>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>No Diagnosis Generated Yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', maxWidth: '380px', margin: '0 auto' }}>
-                Upload or select a crop photo from the left panel and click <strong>"Run AI Diagnosis"</strong> to inspect leaf health and receive customized agronomic treatment plans.
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-heading)' }}>
+                No Crop Analyzed Yet
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', maxWidth: '380px', margin: '0 auto 1.5rem auto' }}>
+                Select your crop type, upload or pick a leaf image from the left panel, and click <strong>"Analyze Crop"</strong> to receive real-time diagnosis and recommendations.
               </p>
+
+              {/* Supported Crops Quick Guide */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem', textAlign: 'left' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+                  Supported Crops in Pathology Model:
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {SUPPORTED_CROPS.map((c) => (
+                    <span key={c} className="badge-pill badge-emerald" style={{ fontSize: '0.72rem' }}>
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -287,7 +499,7 @@ const DiseaseDetectionPage = () => {
               {/* Diagnosis Header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                     <span className="badge-pill badge-emerald">Crop: {diagnosisResult.crop}</span>
                     <span className={`badge-pill ${
                       diagnosisResult.severity === 'Severe' || diagnosisResult.severity === 'Critical' 
@@ -296,90 +508,67 @@ const DiseaseDetectionPage = () => {
                         ? 'badge-amber' 
                         : 'badge-emerald'
                     }`}>
-                      Severity: {diagnosisResult.severity}
+                      Risk / Severity: {diagnosisResult.severity}
                     </span>
                   </div>
-                  <h2 style={{ fontSize: '1.6rem', color: 'var(--text-heading)' }}>
-                    {diagnosisResult.diagnosis}
-                  </h2>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                    Pathogen: {diagnosisResult.scientific_name}
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>
+                    Detected Disease:
                   </div>
+                  <h2 style={{ fontSize: '1.65rem', color: 'var(--text-heading)', lineHeight: '1.25' }}>
+                    {diagnosisResult.disease}
+                  </h2>
+                  {diagnosisResult.scientific_name && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontStyle: 'italic', marginTop: '2px' }}>
+                      Scientific Pathogen: {diagnosisResult.scientific_name}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary-700)', fontFamily: 'var(--font-heading)' }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary-700)', fontFamily: 'var(--font-heading)' }}>
                     {diagnosisResult.confidence}%
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Confidence Score</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Confidence Level</div>
                 </div>
               </div>
 
-              {/* Regional / Hindi Explanation Banner */}
-              <div style={{ marginBottom: '1.25rem', background: '#fefce8', border: '1px solid #fef08a', padding: '0.85rem 1rem', borderRadius: 'var(--radius-sm)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.2rem' }}>
-                  <HelpCircle size={15} /> किसान सलाह (Farmer Advisory in Hindi):
-                </div>
-                <p style={{ fontSize: '0.84rem', color: '#854d0e', lineHeight: '1.4' }}>
-                  पत्तियों पर धब्बे दिखने पर तुरंत प्रभावित पत्तियों को अलग करें और अनुशंसित जैविक अथवा रासायनिक फफूंदनाशक का छिड़काव शाम के समय करें।
-                </p>
-              </div>
-
-              {/* Symptoms Overview */}
-              <div style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid #e2e8f0' }}>
-                <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
-                  <AlertTriangle size={15} style={{ color: 'var(--accent-amber)' }} />
-                  Clinical Symptoms Observed:
-                </strong>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                  {diagnosisResult.symptoms}
-                </p>
-              </div>
-
-              {/* Dual Action Treatment Protocols */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                {/* Chemical Treatment */}
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
-                  <strong style={{ color: '#991b1b', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                    <FlaskConical size={16} /> Chemical Fungicide / Spray:
-                  </strong>
-                  <p style={{ fontSize: '0.84rem', color: '#7f1d1d', lineHeight: '1.5' }}>
-                    {diagnosisResult.chemical_treatment}
+              {/* Hindi / Regional Explanation Box */}
+              {diagnosisResult.regional_explanation && (
+                <div style={{ marginBottom: '1.25rem', background: '#fefce8', border: '1px solid #fef08a', padding: '0.9rem 1.1rem', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+                    <HelpCircle size={15} /> किसान सलाह (Farmer Advisory in Hindi):
+                  </div>
+                  <p style={{ fontSize: '0.88rem', color: '#854d0e', lineHeight: '1.5', fontWeight: 500 }}>
+                    "{diagnosisResult.regional_explanation}"
                   </p>
                 </div>
+              )}
 
-                {/* Organic Treatment */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1rem', borderRadius: 'var(--radius-sm)' }}>
-                  <strong style={{ color: '#166534', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                    <Leaf size={16} /> Organic / Bio-Solution:
+              {/* Symptoms Observed */}
+              {diagnosisResult.symptoms && diagnosisResult.symptoms.length > 0 && (
+                <div style={{ marginBottom: '1.25rem', background: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid #e2e8f0' }}>
+                  <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem' }}>
+                    <AlertTriangle size={15} style={{ color: 'var(--accent-amber)' }} />
+                    Symptoms & Diagnostic Indicators:
                   </strong>
-                  <p style={{ fontSize: '0.84rem', color: '#14532d', lineHeight: '1.5' }}>
-                    {diagnosisResult.organic_treatment}
-                  </p>
+                  <ul style={{ paddingLeft: '1.25rem', fontSize: '0.86rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {diagnosisResult.symptoms.map((s, idx) => (
+                      <li key={idx}>{s}</li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
+              )}
 
-              {/* Preventative Agronomic Measures */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                  <ShieldAlert size={16} style={{ color: 'var(--accent-gold)' }} />
-                  Long-Term Cultural Prevention:
-                </strong>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-                  {diagnosisResult.preventive_measures}
-                </p>
-              </div>
-
-              {/* Action Plan Checklist */}
-              {diagnosisResult.action_plan && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }}>
+              {/* Actionable Advice List */}
+              {diagnosisResult.advice && diagnosisResult.advice.length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <strong style={{ fontSize: '0.92rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
                     <CheckSquare size={16} style={{ color: 'var(--primary-700)' }} />
-                    Recommended Field Action Steps:
+                    Actionable Field Advice:
                   </strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {diagnosisResult.action_plan.map((item) => (
-                      <div key={item.step} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', background: '#f8faf7', border: '1px solid var(--border-subtle)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                    {diagnosisResult.advice.map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', background: '#f0fdf4', border: '1px solid var(--border-green)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)' }}>
                         <span style={{ 
                           width: '20px', 
                           height: '20px', 
@@ -394,21 +583,48 @@ const DiseaseDetectionPage = () => {
                           flexShrink: 0,
                           marginTop: '2px'
                         }}>
-                          {item.step}
+                          {idx + 1}
                         </span>
-                        <div>
-                          <strong style={{ color: 'var(--text-heading)', fontSize: '0.86rem' }}>{item.title}: </strong>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>{item.action}</span>
-                        </div>
+                        <span style={{ color: 'var(--primary-900)', fontSize: '0.86rem', lineHeight: '1.4' }}>
+                          {item}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* AI Disclaimer */}
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.85rem', fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Info size={14} /> AI Diagnostic Disclaimer: This preliminary tool assists agronomic scouting. Verify with your local Krishi Vigyan Kendra (KVK) agronomist before heavy chemical deployment.
+              {/* Prevention Tips List */}
+              {diagnosisResult.prevention && diagnosisResult.prevention.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <strong style={{ fontSize: '0.9rem', color: 'var(--text-heading)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                    <ShieldAlert size={16} style={{ color: 'var(--accent-gold)' }} />
+                    Long-Term Prevention Tips:
+                  </strong>
+                  <ul style={{ paddingLeft: '1.25rem', fontSize: '0.86rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {diagnosisResult.prevention.map((prev, idx) => (
+                      <li key={idx}>{prev}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Mandatory Safety Disclaimer */}
+              <div style={{
+                background: '#f8faf7',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.85rem 1rem',
+                fontSize: '0.82rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.5rem'
+              }}>
+                <ShieldCheck size={18} style={{ color: 'var(--primary-700)', flexShrink: 0, marginTop: '2px' }} />
+                <span>
+                  <strong>Safety Disclaimer:</strong> AI provides preliminary decision support only — not a guaranteed diagnosis. Consult agricultural experts for confirmation.
+                </span>
               </div>
 
             </div>
