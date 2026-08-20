@@ -20,6 +20,8 @@ import {
   Layers
 } from 'lucide-react';
 import { diseaseService } from '../services/diseaseService';
+import { notificationService } from '../services/notificationService';
+import { useAuth } from '../context/AuthContext';
 
 const SUPPORTED_CROPS = ['Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn'];
 const MAX_FILE_SIZE_MB = 10;
@@ -60,6 +62,7 @@ const CROP_SAMPLE_SCENARIOS = {
 };
 
 const DiseaseDetectionPage = () => {
+  const { user } = useAuth();
   const [selectedCrop, setSelectedCrop] = useState('Tomato');
   const [selectedScenarioId, setSelectedScenarioId] = useState('tomato-early-blight');
   const [imageFile, setImageFile] = useState(null);
@@ -190,6 +193,20 @@ const DiseaseDetectionPage = () => {
 
       const res = await diseaseService.analyze(payload);
       setDiagnosisResult(res);
+
+      // Notify logged in user of disease analysis results
+      if (user && user.id) {
+        try {
+          notificationService.notifyDiseaseResult(
+            user.id,
+            res.crop_name || selectedCrop,
+            res.detected_disease || 'Diagnostic Completed',
+            res.severity || 'Moderate'
+          );
+        } catch (notifErr) {
+          console.warn('[DiseaseDetection] Notification notice:', notifErr);
+        }
+      }
 
       // Refresh history
       diseaseService.getHistory().then((data) => {

@@ -19,24 +19,57 @@ import {
   ShieldCheck,
   Users,
   Layers,
-  UserPlus
+  UserPlus,
+  Bell,
+  CheckCheck,
+  Clock,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getRoleDisplayName } from '../services/authService';
+import { notificationService, formatRelativeTime } from '../services/notificationService';
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const dropdownRef = useRef(null);
+  const notifDropdownRef = useRef(null);
   
   const { user, isAuthenticated, role, isFarmer, isMachineryOwner, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Close dropdown on outside click
+  // Load and subscribe to notifications
+  const refreshNotifications = () => {
+    if (user && user.id) {
+      const list = notificationService.getNotifications(user.id);
+      setNotifications(list.slice(0, 5)); // Latest 5
+      setUnreadCount(notificationService.getUnreadCount(user.id));
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  useEffect(() => {
+    refreshNotifications();
+
+    const handleUpdate = () => refreshNotifications();
+    window.addEventListener('agro_smart_notifications_updated', handleUpdate);
+    return () => window.removeEventListener('agro_smart_notifications_updated', handleUpdate);
+  }, [user]);
+
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setUserDropdownOpen(false);
+      }
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target)) {
+        setNotifDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -54,8 +87,26 @@ const Navbar = () => {
   const handleLogoutClick = () => {
     logout();
     setUserDropdownOpen(false);
+    setNotifDropdownOpen(false);
     setMobileMenuOpen(false);
     navigate('/');
+  };
+
+  const handleNotificationItemClick = (notif) => {
+    notificationService.markAsRead(notif.id);
+    setNotifDropdownOpen(false);
+    refreshNotifications();
+    if (notif.action_url) {
+      navigate(notif.action_url);
+    }
+  };
+
+  const handleMarkAllRead = (e) => {
+    e.stopPropagation();
+    if (user?.id) {
+      notificationService.markAllAsRead(user.id);
+      refreshNotifications();
+    }
   };
 
   const getDashboardPath = () => {
@@ -98,13 +149,198 @@ const Navbar = () => {
           </ul>
         </nav>
 
-        {/* Auth Profile / Login Button on Desktop */}
+        {/* Right Toolbar: Notification Bell + Auth Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          
+          {/* Notification Bell (Only for Authenticated Users) */}
+          {isAuthenticated && user && (
+            <div style={{ position: 'relative' }} ref={notifDropdownRef}>
+              <button
+                type="button"
+                aria-label="Notifications"
+                onClick={() => {
+                  setNotifDropdownOpen(!notifDropdownOpen);
+                  setUserDropdownOpen(false);
+                }}
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  background: notifDropdownOpen ? 'var(--primary-100)' : '#ffffff',
+                  color: unreadCount > 0 ? 'var(--primary-800)' : 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      background: '#dc2626',
+                      color: '#ffffff',
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      borderRadius: '10px',
+                      minWidth: '18px',
+                      height: '18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                      boxShadow: '0 2px 5px rgba(220, 38, 38, 0.4)'
+                    }}
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown Menu */}
+              {notifDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 'calc(100% + 8px)',
+                  width: '340px',
+                  background: '#ffffff',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)',
+                  border: '1px solid var(--border-green)',
+                  zIndex: 300,
+                  overflow: 'hidden'
+                }}>
+                  {/* Dropdown Header */}
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    background: '#f8faf7',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <strong style={{ fontSize: '0.92rem', color: 'var(--text-heading)' }}>
+                        Notifications
+                      </strong>
+                      {unreadCount > 0 && (
+                        <span className="badge-pill badge-emerald" style={{ fontSize: '0.68rem', padding: '0.1rem 0.45rem' }}>
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary-700)',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          padding: 0
+                        }}
+                      >
+                        <CheckCheck size={13} />
+                        <span>Mark all read</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Notification Items List */}
+                  <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.84rem' }}>
+                        <Bell size={28} style={{ color: 'var(--border-subtle)', margin: '0 auto 0.4rem auto' }} />
+                        <div>No notifications yet.</div>
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleNotificationItemClick(n)}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            borderBottom: '1px solid var(--border-subtle)',
+                            background: n.read ? '#ffffff' : '#f0fdf4',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                            <strong style={{ fontSize: '0.86rem', color: 'var(--text-heading)', lineHeight: 1.3 }}>
+                              {n.title}
+                            </strong>
+                            {!n.read && (
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary-700)', flexShrink: 0, marginTop: '5px' }} />
+                            )}
+                          </div>
+                          
+                          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 0.35rem 0', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {n.message}
+                          </p>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <Clock size={11} />
+                              {formatRelativeTime(n.created_at)}
+                            </span>
+                            <span style={{ color: 'var(--primary-800)', fontWeight: 600 }}>Open →</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Dropdown Footer */}
+                  <Link
+                    to="/notifications"
+                    onClick={() => setNotifDropdownOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem',
+                      padding: '0.65rem',
+                      background: '#f8faf7',
+                      color: 'var(--primary-800)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      borderTop: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <span>View All Notifications</span>
+                    <ChevronRight size={14} />
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* User Profile Pill / Menu */}
           {isAuthenticated && user ? (
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
                 type="button"
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                onClick={() => {
+                  setUserDropdownOpen(!userDropdownOpen);
+                  setNotifDropdownOpen(false);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -237,6 +473,16 @@ const Navbar = () => {
                     </>
                   )}
 
+                  {/* Common Notifications Link */}
+                  <Link
+                    to="/notifications"
+                    onClick={() => setUserDropdownOpen(false)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', fontSize: '0.84rem', color: 'var(--text-heading)', textDecoration: 'none' }}
+                  >
+                    <Bell size={15} style={{ color: 'var(--primary-700)' }} />
+                    <span>Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}</span>
+                  </Link>
+
                   <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '0.35rem', paddingTop: '0.35rem' }}>
                     <button
                       type="button"
@@ -325,6 +571,23 @@ const Navbar = () => {
         {isAuthenticated ? (
           <>
             <NavLink
+              to="/notifications"
+              className="nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{ padding: '0.8rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Bell size={18} />
+                <span>Notifications</span>
+              </div>
+              {unreadCount > 0 && (
+                <span className="badge-pill badge-red" style={{ fontSize: '0.7rem' }}>
+                  {unreadCount}
+                </span>
+              )}
+            </NavLink>
+
+            <NavLink
               to={getDashboardPath()}
               className="nav-link"
               onClick={() => setMobileMenuOpen(false)}
@@ -333,6 +596,7 @@ const Navbar = () => {
               <LayoutDashboard size={18} />
               <span>Dashboard</span>
             </NavLink>
+            
             <button
               type="button"
               onClick={handleLogoutClick}

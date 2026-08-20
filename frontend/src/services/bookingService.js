@@ -1,4 +1,5 @@
 import { request } from './api';
+import { notificationService } from './notificationService';
 
 const BOOKINGS_KEY = 'agro_smart_bookings';
 
@@ -73,6 +74,7 @@ export const bookingService = {
   /**
    * Create a new booking.
    * Initial status is strictly PENDING.
+   * Dispatches notifications to Machinery Owner and Admin.
    */
   async createBooking(bookingData) {
     const currentList = getStoredBookings();
@@ -93,7 +95,7 @@ export const bookingService = {
       machinery_id: bookingData.machinery_id,
       machine_name: bookingData.machine_name || 'Farm Machinery',
       machine_type: bookingData.machine_type || 'Tractor',
-      farmer_id: bookingData.farmer_id || 'usr-farmer',
+      farmer_id: bookingData.farmer_id || 'usr-demo-farmer-01',
       farmer_name: bookingData.farmer_name || 'Farmer',
       farmer_phone: bookingData.farmer_phone || bookingData.phone || '9876543210',
       phone: bookingData.farmer_phone || bookingData.phone || '9876543210',
@@ -129,6 +131,19 @@ export const bookingService = {
     // Update local shared storage
     const updated = [newBooking, ...currentList];
     saveStoredBookings(updated);
+
+    // Dispatch Notification to Machinery Owner
+    try {
+      notificationService.notifyBookingRequest(newBooking, newBooking.owner_id);
+      notificationService.notifyAdminActivity(
+        `New Rental Booking: ${newBooking.machine_name}`,
+        `${newBooking.farmer_name} created a rental booking request for ${newBooking.machine_name} (${newBooking.booking_date}).`,
+        newBooking.id
+      );
+    } catch (notifErr) {
+      console.warn('[BookingService] Notification dispatch notice:', notifErr);
+    }
+
     return newBooking;
   },
 
@@ -176,6 +191,7 @@ export const bookingService = {
 
   /**
    * Update status of a booking (ACCEPT, REJECT, CANCEL, COMPLETED).
+   * Automatically dispatches synchronized notifications.
    */
   async updateBookingStatus(bookingId, rawStatus) {
     const newStatus = String(rawStatus || '').toUpperCase().trim();
@@ -199,6 +215,22 @@ export const bookingService = {
     }
 
     saveStoredBookings([...currentList]);
+
+    // Dispatch Lifecycle Notification
+    try {
+      if (newStatus === 'ACCEPTED') {
+        notificationService.notifyBookingAccepted(target, target.farmer_id);
+      } else if (newStatus === 'REJECTED') {
+        notificationService.notifyBookingRejected(target, target.farmer_id);
+      } else if (newStatus === 'CANCELLED') {
+        notificationService.notifyBookingCancelled(target, target.owner_id);
+      } else if (newStatus === 'COMPLETED') {
+        notificationService.notifyBookingCompleted(target, target.farmer_id);
+      }
+    } catch (notifErr) {
+      console.warn('[BookingService] Status notification error:', notifErr);
+    }
+
     return target;
   },
 

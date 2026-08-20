@@ -22,6 +22,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { weatherService } from '../services/weatherService';
+import { notificationService } from '../services/notificationService';
+import { useAuth } from '../context/AuthContext';
 import { useGeolocation } from '../hooks/useGeolocation';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 
@@ -44,6 +46,7 @@ const PRESET_LOCATIONS = [
 const CROPS = ['Tomato', 'Potato', 'Rice', 'Wheat', 'Cotton', 'Corn', 'Sugarcane'];
 
 const WeatherIntelligencePage = () => {
+  const { user } = useAuth();
   const [selectedLocation, setSelectedLocation] = useState('Patna, Bihar');
   const [customCity, setCustomCity] = useState('');
   const [selectedCrop, setSelectedCrop] = useState('Tomato');
@@ -66,6 +69,21 @@ const WeatherIntelligencePage = () => {
     try {
       const data = await weatherService.getWeatherRisk(targetLoc, targetCrop, lat, lon);
       setWeatherData(data);
+
+      // Notify logged in user if risk is high/critical (with automatic deduplication)
+      if (user && user.id && (data?.risk_level === 'HIGH' || data?.risk_level === 'CRITICAL')) {
+        try {
+          notificationService.notifyWeatherRisk(
+            user.id,
+            targetCrop,
+            targetLoc,
+            data.risk_level,
+            data.recommendation || `High humidity and rainfall may increase fungal disease risk for ${targetCrop}.`
+          );
+        } catch (notifErr) {
+          console.warn('[WeatherIntelligence] Notification notice:', notifErr);
+        }
+      }
 
       // Refresh history list
       weatherService.getHistory().then((hist) => {

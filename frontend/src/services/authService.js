@@ -1,4 +1,5 @@
 import { request } from './api';
+import { notificationService } from './notificationService';
 
 const SESSION_STORAGE_KEY = 'agro_smart_session';
 const USERS_REGISTRY_KEY = 'agro_smart_users';
@@ -235,6 +236,17 @@ export const authService = {
     const safeUser = this._normalizeUser(newUser);
     const token = `demo-tok-${Date.now()}`;
     this.saveSession(safeUser, token, true);
+
+    try {
+      notificationService.notifyAdminActivity(
+        `New User Registered: ${safeUser.name}`,
+        `${safeUser.name} registered as ${safeUser.user_type} in ${safeUser.district}, ${safeUser.state}.`,
+        safeUser.id
+      );
+    } catch (notifErr) {
+      console.warn('[AuthService] Admin notification notice:', notifErr);
+    }
+
     return { user: safeUser, token, is_demo_session: true };
   },
 
