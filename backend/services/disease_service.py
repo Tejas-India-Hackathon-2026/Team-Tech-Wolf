@@ -402,7 +402,7 @@ def is_disease_service_configured():
     Checks if a real vision AI model / API service is configured.
     Returns False when operating in prototype/demo mode.
     """
-    key = os.getenv("DISEASE_AI_API_KEY", os.getenv("DISEASE_API_KEY", "")).strip()
+    key = os.getenv("GEMINI_API_KEY", os.getenv("DISEASE_AI_API_KEY", os.getenv("DISEASE_API_KEY", ""))).strip()
     if not key:
         return False
     if key.startswith("your-") or key.lower() in {"mock", "demo", "none", "false"}:

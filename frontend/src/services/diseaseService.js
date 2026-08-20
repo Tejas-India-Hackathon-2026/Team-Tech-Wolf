@@ -6,29 +6,11 @@ export const diseaseService = {
    * Accepts FormData or JSON object
    */
   async analyze(formDataOrJson) {
-    try {
-      const isFormData = formDataOrJson instanceof FormData;
-      return await request('/disease/analyze', {
-        method: 'POST',
-        body: isFormData ? formDataOrJson : JSON.stringify(formDataOrJson),
-      });
-    } catch (err) {
-      console.warn('[DiseaseService] Backend /disease/analyze fallback:', err.message);
-      
-      // Determine crop name and scenario from payload
-      let crop = 'Tomato';
-      let scenarioId = null;
-      if (formDataOrJson instanceof FormData) {
-        crop = formDataOrJson.get('crop') || 'Tomato';
-        scenarioId = formDataOrJson.get('scenario_id') || formDataOrJson.get('scenario');
-      } else if (formDataOrJson && formDataOrJson.crop) {
-        crop = formDataOrJson.crop;
-        scenarioId = formDataOrJson.scenario_id || formDataOrJson.scenario;
-      }
-
-      // Return honest dynamic crop-dependent prototype demo fallback
-      return getMockDiagnosisForCrop(crop, scenarioId);
-    }
+    const isFormData = formDataOrJson instanceof FormData;
+    return await request('/disease/analyze', {
+      method: 'POST',
+      body: isFormData ? formDataOrJson : JSON.stringify(formDataOrJson),
+    });
   },
 
   /**

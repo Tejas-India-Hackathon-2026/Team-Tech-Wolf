@@ -8,8 +8,13 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load Environment Variables
-load_dotenv()
+# Load Environment Variables (prioritizes backend/.env)
+basedir = os.path.abspath(os.path.dirname(__file__))
+backend_env = os.path.join(basedir, '.env')
+if os.path.exists(backend_env):
+    load_dotenv(backend_env)
+else:
+    load_dotenv()
 
 # Import Route Blueprints
 from routes.auth_routes import auth_bp

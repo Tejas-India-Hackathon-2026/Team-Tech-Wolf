@@ -20,7 +20,8 @@ import {
   Layers,
   CheckCircle2,
   HelpCircle as QuestionIcon,
-  ArrowRight
+  ArrowRight,
+  SearchX
 } from 'lucide-react';
 import { diseaseService } from '../services/diseaseService';
 import { notificationService } from '../services/notificationService';
@@ -86,7 +87,7 @@ const CROP_SAMPLE_SCENARIOS = {
 const DiseaseDetectionPage = () => {
   const { user } = useAuth();
   const [selectedCrop, setSelectedCrop] = useState('Auto Detect Crop');
-  const [selectedScenarioId, setSelectedScenarioId] = useState('tomato-early-blight');
+  const [selectedScenarioId, setSelectedScenarioId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [fileDetails, setFileDetails] = useState(null);
@@ -107,26 +108,9 @@ const DiseaseDetectionPage = () => {
   // Sync default scenario when crop changes
   const handleCropChange = (cropName) => {
     setSelectedCrop(cropName);
-    const scenarios = CROP_SAMPLE_SCENARIOS[cropName] || CROP_SAMPLE_SCENARIOS['Auto Detect Crop'] || [];
-    const firstScenario = scenarios[0]?.id || null;
-    setSelectedScenarioId(firstScenario);
+    setSelectedScenarioId(null);
     setDiagnosisResult(null);
     setErrorMessage(null);
-    
-    // If an uploaded file is not active, preview the first scenario sample
-    if (!imageFile) {
-      if (scenarios[0]) {
-        setImagePreview(scenarios[0].preview);
-        setFileDetails({
-          name: `${(cropName === 'Auto Detect Crop' ? 'crop' : cropName).toLowerCase()}_sample_leaf.jpg`,
-          size: '1.2 MB',
-          type: 'SAMPLE'
-        });
-      } else {
-        setImagePreview(null);
-        setFileDetails(null);
-      }
-    }
   };
 
   const handleImageChange = (e) => {
@@ -156,6 +140,7 @@ const DiseaseDetectionPage = () => {
       return;
     }
 
+    setSelectedScenarioId(null);
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setFileDetails({
@@ -212,11 +197,12 @@ const DiseaseDetectionPage = () => {
         };
       }
 
+      console.log('[Disease] Sending analysis request');
       const res = await diseaseService.analyze(payload);
       setDiagnosisResult(res);
 
-      // Notify logged in user of disease analysis results if it's a valid crop image
-      if (user && user.id && res.is_plant_image !== false && res.image_quality !== 'unclear') {
+      // Notify logged in user of disease analysis results only if it's a valid crop diagnosis
+      if (user && user.id && res.success !== false && res.is_plant_image !== false && res.image_quality !== 'unclear' && !res.error_code) {
         try {
           notificationService.notifyDiseaseResult(
             user.id,
@@ -235,6 +221,7 @@ const DiseaseDetectionPage = () => {
       });
 
     } catch (err) {
+      console.error("Disease analysis failed:", err);
       setErrorMessage(err.message || 'An unexpected error occurred during disease analysis. Please check your connection and retry.');
     } finally {
       setIsAnalyzing(false);
@@ -245,6 +232,7 @@ const DiseaseDetectionPage = () => {
     setImageFile(null);
     setImagePreview(null);
     setFileDetails(null);
+    setSelectedScenarioId(null);
     setDiagnosisResult(null);
     setErrorMessage(null);
   };
@@ -255,7 +243,8 @@ const DiseaseDetectionPage = () => {
       setDiagnosisResult({
         ...diagnosisResult,
         crop_match: true,
-        mismatch_warning: null
+        mismatch_warning: null,
+        error_code: null
       });
     }
   };
@@ -291,7 +280,7 @@ const DiseaseDetectionPage = () => {
           Crop Pathology & AI Disease Detection
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
-          Multimodal crop leaf analysis with auto-crop detection, non-plant verification, and actionable treatment recommendations.
+          Multimodal crop leaf analysis with auto-crop detection, strict plant verification, and actionable treatment recommendations.
         </p>
       </div>
 
@@ -320,8 +309,8 @@ const DiseaseDetectionPage = () => {
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: isAnalyzing ? 'var(--accent-amber)' : 'var(--text-muted)' }}>Gemini AI Vision</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: diagnosisResult ? 'var(--primary-700)' : 'var(--primary-100)', color: diagnosisResult ? '#ffffff' : 'var(--primary-800)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: diagnosisResult ? 'var(--primary-700)' : 'var(--text-muted)' }}>Actionable Advice</span>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: diagnosisResult && diagnosisResult.success !== false ? 'var(--primary-700)' : 'var(--primary-100)', color: diagnosisResult && diagnosisResult.success !== false ? '#ffffff' : 'var(--primary-800)', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>4</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: diagnosisResult && diagnosisResult.success !== false ? 'var(--primary-700)' : 'var(--text-muted)' }}>Actionable Advice</span>
         </div>
       </div>
 
@@ -630,7 +619,7 @@ const DiseaseDetectionPage = () => {
             </div>
           )}
 
-          {/* RESPONSE CASE 1: Non-Plant Image Rejection */}
+          {/* RESPONSE CASE 1: Non-Plant Image Rejection (HARD GATE) */}
           {!isAnalyzing && diagnosisResult && (diagnosisResult.is_plant_image === false || diagnosisResult.error_code === 'NON_PLANT_IMAGE') && (
             <div className="glass-card" style={{ border: '1px solid #fca5a5', background: '#fef2f2' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', marginBottom: '1rem' }}>
@@ -648,18 +637,21 @@ const DiseaseDetectionPage = () => {
                   <AlertCircle size={24} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', color: '#991b1b', margin: '0 0 0.35rem 0' }}>
+                  <h3 style={{ fontSize: '1.25rem', color: '#991b1b', margin: '0 0 0.35rem 0' }}>
                     Invalid Crop Image
                   </h3>
-                  <p style={{ fontSize: '0.88rem', color: '#7f1d1d', margin: 0, lineHeight: 1.45 }}>
-                    {diagnosisResult.message || 'This image does not appear to contain a crop or plant. Please upload a clear image of the affected plant, leaf, stem, fruit, or crop.'}
+                  <p style={{ fontSize: '0.92rem', color: '#7f1d1d', margin: 0, lineHeight: 1.45, fontWeight: 500 }}>
+                    {diagnosisResult.message || 'This image does not appear to be a real plant or crop.'}
+                  </p>
+                  <p style={{ fontSize: '0.84rem', color: '#991b1b', marginTop: '0.35rem', marginBottom: 0 }}>
+                    {diagnosisResult.sub_message || 'Please upload a clear photo of a leaf, stem, fruit, crop or affected plant area.'}
                   </p>
                 </div>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #fecaca', padding: '0.85rem 1rem', borderRadius: 'var(--radius-sm)', marginBottom: '1.25rem' }}>
                 <strong style={{ fontSize: '0.82rem', color: '#991b1b', display: 'block', marginBottom: '0.3rem' }}>
-                  Tips for Accurate AI Vision Analysis:
+                  {diagnosisResult.tip || 'Tip: Use good lighting and keep the plant clearly visible.'}
                 </strong>
                 <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <li>Take the photo in good natural daylight without extreme glare or dark shadows.</li>
@@ -698,10 +690,10 @@ const DiseaseDetectionPage = () => {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.2rem', color: '#92400e', margin: '0 0 0.35rem 0' }}>
-                    Image Unclear / Unusable
+                    Image Unclear
                   </h3>
                   <p style={{ fontSize: '0.88rem', color: '#78350f', margin: 0, lineHeight: 1.45 }}>
-                    {diagnosisResult.message || 'Unable to clearly analyze this image. Please upload a sharper, well-lit close-up of the affected crop.'}
+                    {diagnosisResult.message || 'Unable to clearly analyze this image. Please upload a sharper close-up of the plant.'}
                   </p>
                 </div>
               </div>
@@ -717,17 +709,29 @@ const DiseaseDetectionPage = () => {
             </div>
           )}
 
-          {/* RESPONSE CASE 3: Crop Mismatch Warning */}
-          {!isAnalyzing && diagnosisResult && diagnosisResult.is_plant_image !== false && diagnosisResult.crop_match === false && diagnosisResult.mismatch_warning && (
-            <div className="glass-card" style={{ border: '1px solid #fde68a', background: '#fffbeb', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.85rem' }}>
-                <AlertTriangle size={22} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+          {/* RESPONSE CASE 3: Crop Uncertain Alert (No Tomato Default) */}
+          {!isAnalyzing && diagnosisResult && diagnosisResult.is_plant_image !== false && diagnosisResult.error_code === 'CROP_UNCERTAIN' && (
+            <div className="glass-card" style={{ border: '1px solid #fde68a', background: '#fffbeb' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', marginBottom: '1rem' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: '#fef3c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#d97706',
+                  flexShrink: 0
+                }}>
+                  <SearchX size={24} />
+                </div>
                 <div>
-                  <strong style={{ fontSize: '1rem', color: '#92400e', display: 'block', marginBottom: '0.2rem' }}>
-                    Crop Mismatch Detected
-                  </strong>
-                  <p style={{ fontSize: '0.85rem', color: '#78350f', margin: 0 }}>
-                    {diagnosisResult.mismatch_warning}
+                  <h3 style={{ fontSize: '1.2rem', color: '#92400e', margin: '0 0 0.35rem 0' }}>
+                    Crop Uncertain
+                  </h3>
+                  <p style={{ fontSize: '0.88rem', color: '#78350f', margin: 0, lineHeight: 1.45 }}>
+                    {diagnosisResult.message || 'The crop could not be identified confidently. Please select the crop manually or upload a clearer image.'}
                   </p>
                 </div>
               </div>
@@ -736,12 +740,53 @@ const DiseaseDetectionPage = () => {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={handleUseDetectedCrop}
+                  onClick={() => {
+                    const el = document.querySelector('select');
+                    if (el) el.focus();
+                  }}
                   style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
                 >
-                  <CheckCircle2 size={14} />
-                  <span>Use Detected Crop ({diagnosisResult.detected_crop})</span>
+                  Select Crop Manually
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={resetUpload}
+                  style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                >
+                  Upload Clearer Image
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* RESPONSE CASE 4: Crop Mismatch Warning */}
+          {!isAnalyzing && diagnosisResult && diagnosisResult.is_plant_image !== false && (diagnosisResult.crop_match === false || diagnosisResult.error_code === 'CROP_MISMATCH') && (
+            <div className="glass-card" style={{ border: '1px solid #fde68a', background: '#fffbeb', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                <AlertTriangle size={22} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ fontSize: '1rem', color: '#92400e', display: 'block', marginBottom: '0.2rem' }}>
+                    Crop Mismatch Detected
+                  </strong>
+                  <p style={{ fontSize: '0.85rem', color: '#78350f', margin: 0 }}>
+                    {diagnosisResult.mismatch_warning || diagnosisResult.message || `The uploaded image appears to be ${diagnosisResult.detected_crop}, but ${diagnosisResult.selected_crop || selectedCrop} was selected.`}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {diagnosisResult.detected_crop && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleUseDetectedCrop}
+                    style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Use Detected Crop ({diagnosisResult.detected_crop})</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -755,8 +800,33 @@ const DiseaseDetectionPage = () => {
             </div>
           )}
 
-          {/* RESPONSE CASE 4: Valid Plant Analysis (Healthy or Disease Suspected) */}
-          {!isAnalyzing && diagnosisResult && diagnosisResult.is_plant_image !== false && diagnosisResult.image_quality !== 'unclear' && (
+          {/* RESPONSE CASE 5: Generic Service Error */}
+          {!isAnalyzing && diagnosisResult && diagnosisResult.success === false && !['NON_PLANT_IMAGE', 'IMAGE_UNCLEAR', 'CROP_UNCERTAIN', 'CROP_MISMATCH'].includes(diagnosisResult.error_code) && (
+            <div className="glass-card" style={{ border: '1px solid #fca5a5', background: '#fef2f2' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', marginBottom: '1rem' }}>
+                <AlertCircle size={24} style={{ color: '#dc2626', flexShrink: 0 }} />
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', color: '#991b1b', margin: '0 0 0.35rem 0' }}>
+                    Analysis Notice
+                  </h3>
+                  <p style={{ fontSize: '0.88rem', color: '#7f1d1d', margin: 0 }}>
+                    {diagnosisResult.message || 'AI analysis is temporarily unavailable. Please try again.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={resetUpload}
+                style={{ width: '100%', justifyContent: 'center', fontSize: '0.86rem' }}
+              >
+                Try Another Photo
+              </button>
+            </div>
+          )}
+
+          {/* RESPONSE CASE 6: Valid Plant Analysis (Healthy or Disease Suspected) */}
+          {!isAnalyzing && diagnosisResult && diagnosisResult.success !== false && diagnosisResult.is_plant_image !== false && diagnosisResult.image_quality !== 'unclear' && !diagnosisResult.error_code && (
             <div className="glass-card" style={{ border: '1px solid var(--primary-200)' }}>
               
               {/* Diagnosis Header */}
@@ -813,7 +883,7 @@ const DiseaseDetectionPage = () => {
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ background: '#f0fdf4', border: '1px solid var(--border-green)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.85rem', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--primary-800)' }}>
-                      {diagnosisResult.confidence_level || (diagnosisResult.confidence ? `${diagnosisResult.confidence * 100}%` : 'High Visual Likelihood')}
+                      {diagnosisResult.confidence_level || (diagnosisResult.confidence ? `${Math.round(diagnosisResult.confidence * 100)}%` : 'High Visual Likelihood')}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                       Visual Likelihood

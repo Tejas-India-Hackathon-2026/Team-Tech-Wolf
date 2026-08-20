@@ -19,6 +19,7 @@ def analyze_crop():
     'crop' can be 'auto' / 'Auto Detect Crop' or a specific crop name (Tomato, Potato, Rice, etc.).
     Routes image through Gemini Multimodal Vision service on Flask backend.
     """
+    print("[Disease] Analysis request received")
     try:
         image_bytes = None
         mime_type = "image/jpeg"
