@@ -6,9 +6,28 @@ from services.market_service import (
     get_supported_crops,
     get_supported_locations
 )
+from services.agmarknet_service import get_bihar_mandi_intelligence
 from utils.helpers import success_response, error_response
 
 market_bp = Blueprint("market", __name__, url_prefix="/api/market")
+
+BIHAR_DISTRICTS = [
+    "Jamui",
+    "Lakhisarai",
+    "Munger",
+    "Bhagalpur",
+    "Banka",
+    "Nawada",
+    "Begusarai",
+    "Patna",
+    "Gaya",
+    "Muzaffarpur",
+    "Nalanda",
+    "Samastipur",
+    "Rohtas",
+    "Purnia",
+    "Katihar"
+]
 
 @market_bp.route("/crops", methods=["GET"])
 def list_crops():
@@ -22,19 +41,71 @@ def list_locations():
     locations = get_supported_locations()
     return success_response(locations, message="Market locations list retrieved")
 
+@market_bp.route("/districts", methods=["GET"])
+def list_districts():
+    """Returns list of Bihar districts supported for local mandi intelligence."""
+    state = request.args.get("state", "Bihar")
+    return success_response({
+        "state": state,
+        "districts": BIHAR_DISTRICTS,
+        "default_district": "Jamui"
+    }, message="Districts fetched successfully")
+
+@market_bp.route("/mandis", methods=["GET"])
+def get_mandis():
+    """
+    Primary Local Mandi Endpoint: GET /api/market/mandis
+    Parameters:
+      - state: default 'Bihar'
+      - district: default 'Jamui'
+      - commodity / crop: default 'Tomato'
+      - lat / latitude: optional float (farmer GPS)
+      - lon / longitude: optional float (farmer GPS)
+    Returns structured government/reference mandi prices, Jamui check, and nearby alternative Bihar mandis.
+    """
+    try:
+        state = request.args.get("state", "Bihar")
+        district = request.args.get("district", "Jamui")
+        commodity = request.args.get("commodity") or request.args.get("crop") or "Tomato"
+        
+        lat = request.args.get("lat") or request.args.get("latitude")
+        lon = request.args.get("lon") or request.args.get("longitude")
+
+        farmer_lat = float(lat) if lat is not None and str(lat).strip() not in {"", "null", "undefined"} else None
+        farmer_lon = float(lon) if lon is not None and str(lon).strip() not in {"", "null", "undefined"} else None
+
+        data = get_bihar_mandi_intelligence(
+            state=state,
+            district=district,
+            commodity=commodity,
+            farmer_lat=farmer_lat,
+            farmer_lon=farmer_lon
+        )
+        return success_response(data, message="Mandi intelligence retrieved successfully")
+    except Exception as e:
+        return error_response(message="Failed to retrieve mandi intelligence", details=str(e), status_code=500)
+
+@market_bp.route("/nearby", methods=["GET"])
+def get_nearby_mandis():
+    """
+    Nearby Mandi Search Endpoint: GET /api/market/nearby
+    Parameters: latitude, longitude, commodity
+    """
+    return get_mandis()
+
 @market_bp.route("/analysis", methods=["GET"])
 def get_analysis():
     """
     Primary endpoint: GET /api/market/analysis
     Parameters:
       - crop: Tomato, Potato, Onion, Wheat, Rice, Maize
-      - location: e.g. "Patna Mandi, Bihar" or "Pune Mandi, Maharashtra"
+      - location: e.g. "Jamui Mandi, Bihar" or "Patna Mandi, Bihar"
       - days: 7, 15, or 30 (default 30)
     Returns structured JSON with prices, metrics, estimated range, trend, and recommendation.
     """
     try:
         crop = request.args.get("crop", "Tomato")
-        location = request.args.get("location", "Patna Mandi, Bihar")
+        location = request.args.get("location", "Jamui Mandi, Bihar")
         days = request.args.get("days", default=30, type=int)
 
         data = get_market_analysis(crop_name=crop, location=location, days=days)
