@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS weather_checks (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. FARM MACHINERY MASTER TABLE (Uber for Tractors Marketplace)
+-- 4. FARM MACHINERY MASTER TABLE
 CREATE TABLE IF NOT EXISTS machinery (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     owner_name VARCHAR(150) NOT NULL,
@@ -88,23 +88,22 @@ CREATE TABLE IF NOT EXISTS machinery_bookings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. MANDI / APMC MARKET COMMODITY PRICES
+-- 6. MANDI / APMC MARKET PRICES TABLE (Part 5: Market Intelligence)
 CREATE TABLE IF NOT EXISTS market_prices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    commodity VARCHAR(100) NOT NULL,
-    variety VARCHAR(100),
+    crop_name VARCHAR(100) NOT NULL,
     mandi_name VARCHAR(150) NOT NULL,
-    district VARCHAR(100) NOT NULL,
-    state VARCHAR(100) NOT NULL,
-    min_price NUMERIC(10,2) NOT NULL,
-    max_price NUMERIC(10,2) NOT NULL,
-    modal_price NUMERIC(10,2) NOT NULL,
-    price_unit VARCHAR(20) DEFAULT '₹/Quintal',
-    price_trend VARCHAR(20) CHECK (price_trend IN ('Bullish', 'Bearish', 'Stable')),
-    forecast_next_week NUMERIC(10,2),
-    reported_date DATE DEFAULT CURRENT_DATE,
+    location VARCHAR(150) NOT NULL,
+    price_per_quintal NUMERIC(10,2) NOT NULL,
+    price_date DATE NOT NULL,
+    source VARCHAR(100) DEFAULT 'Demo Market Data',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Create Indexes for fast querying on crop, location, and date
+CREATE INDEX IF NOT EXISTS idx_market_prices_crop ON market_prices(crop_name);
+CREATE INDEX IF NOT EXISTS idx_market_prices_location ON market_prices(location);
+CREATE INDEX IF NOT EXISTS idx_market_prices_date ON market_prices(price_date);
 
 -- ==========================================================
 -- SEED DATA
@@ -115,21 +114,19 @@ INSERT INTO crops (name, category, optimal_temp_min, optimal_temp_max, optimal_h
 VALUES
 ('Tomato', 'Vegetable', 18.0, 28.0, 50.0, 75.0, 'Moderate', 'All Season'),
 ('Potato', 'Vegetable', 15.0, 22.0, 60.0, 85.0, 'Moderate', 'Rabi'),
-('Rice', 'Cereal', 20.0, 35.0, 60.0, 90.0, 'High', 'Kharif'),
+('Onion', 'Vegetable', 15.0, 30.0, 50.0, 70.0, 'Moderate', 'Rabi/Kharif'),
 ('Wheat', 'Cereal', 15.0, 25.0, 40.0, 70.0, 'Moderate', 'Rabi'),
-('Cotton', 'Cash Crop', 21.0, 32.0, 50.0, 80.0, 'Moderate', 'Kharif'),
-('Corn', 'Cereal', 18.0, 30.0, 50.0, 80.0, 'Moderate', 'Kharif')
+('Rice', 'Cereal', 20.0, 35.0, 60.0, 90.0, 'High', 'Kharif'),
+('Maize', 'Cereal', 18.0, 30.0, 50.0, 80.0, 'Moderate', 'Kharif')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed Farm Machinery Listings
-INSERT INTO machinery (owner_name, owner_phone, machine_name, machine_type, horse_power, price_per_hour, price_per_day, rating, reviews_count, location, distance_km, availability, features)
+-- Seed Market Prices (Sample initial records)
+INSERT INTO market_prices (crop_name, mandi_name, location, price_per_quintal, price_date, source)
 VALUES
-('Rajesh Patil', '+91 98234 11201', 'Mahindra 575 DI Power Plus', 'Tractor', 47, 700.00, 4900.00, 4.8, 34, 'Pune Rural, Maharashtra', 2.5, 'Available Now', '["Power Steering", "Rotavator Ready", "Dual Clutch", "Low Fuel Burn"]'::jsonb),
-('Suresh Kulkarni', '+91 97654 88312', 'John Deere 5310 4WD Heavy Duty', 'Tractor', 55, 850.00, 5800.00, 4.9, 48, 'Baramati, Maharashtra', 6.2, 'Available Now', '["4-Wheel Drive", "Heavy Cultivation", "AC Cabin", "Laser Leveler Ready"]'::jsonb),
-('Manoj Kumar Singh', '+91 94310 22345', 'Swaraj 855 FE Heavy Duty Tractor', 'Tractor', 52, 650.00, 4500.00, 4.7, 28, 'Patna Rural, Bihar', 3.8, 'Available Now', '["Multi-Speed PTO", "High Torque", "Plough Compatible"]'::jsonb),
-('Gurmeet Singh', '+91 94220 54321', 'Preet 987 Self-Propelled Multi-Crop', 'Harvester', 101, 1600.00, 11000.00, 4.9, 29, 'Karnal, Haryana', 8.5, 'Available Now', '["14ft Cutter Bar", "Paddy & Wheat Specialist", "Straw Chopper Included"]'::jsonb),
-('Harpreet Gill', '+91 98140 77654', 'Claas Crop Tiger 30 Grain Harvester', 'Harvester', 75, 1800.00, 12500.00, 4.8, 19, 'Ludhiana, Punjab', 12.0, 'Available Now', '["Rubber Tracks for Wet Soil", "High Grain Recovery", "Low Grain Loss"]'::jsonb),
-('Vikas Shinde', '+91 98601 99887', 'Shaktiman Semi-Champion 7-Feet', 'Rotavator', 50, 350.00, 2400.00, 4.8, 22, 'Ahmednagar, Maharashtra', 4.5, 'Available Now', '["48 Boron Steel Blades", "205cm Working Width", "Multi-Speed Gearbox"]'::jsonb),
-('Rameshwar Yadav', '+91 94302 88123', 'Fieldking Heavy Duty 9-Tyne Rigid', 'Cultivator', 45, 300.00, 2000.00, 4.7, 16, 'Patna, Bihar', 5.0, 'Available Now', '["9 Forged Tynes", "Zero Soil Compaction", "High Penetration"]'::jsonb),
-('Babanrao Patil', '+91 94231 66778', 'National Automatic Seed-Cum-Fertilizer Drill', 'Seed Drill', 45, 400.00, 2800.00, 4.9, 25, 'Agra, Uttar Pradesh', 9.2, 'Available Now', '["9-Row Sowing", "Simultaneous Fertilizer Metering", "Zero-Till Adaptable"]'::jsonb)
+('Tomato', 'Patna Mandi', 'Patna, Bihar', 2200.00, CURRENT_DATE, 'Demo Market Data'),
+('Wheat', 'Pune Mandi (Gultekdi)', 'Pune, Maharashtra', 2720.00, CURRENT_DATE, 'Demo Market Data'),
+('Onion', 'Lasalgaon Mandi', 'Nashik, Maharashtra', 2180.00, CURRENT_DATE, 'Demo Market Data'),
+('Rice', 'Karnal APMC', 'Karnal, Haryana', 4310.00, CURRENT_DATE, 'Demo Market Data'),
+('Potato', 'Agra APMC', 'Agra, Uttar Pradesh', 1420.00, CURRENT_DATE, 'Demo Market Data'),
+('Maize', 'Latur APMC', 'Latur, Maharashtra', 2150.00, CURRENT_DATE, 'Demo Market Data')
 ON CONFLICT DO NOTHING;

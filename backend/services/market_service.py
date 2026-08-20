@@ -1,204 +1,268 @@
 """
-Market Intelligence & Mandi APMC Price Service
-Provides commodity spot prices, 7-day trend forecasts, mandi comparison, and profit calculators.
+Market Intelligence & Selling Decision Engine
+Provides historical price trend analysis, transparent estimate ranges,
+and explainable recommendations (SELL / MONITOR / WAIT) for farmers.
 """
+import os
+import time
+import math
+import hashlib
+from datetime import datetime, timedelta
+from models import supabase_client
 
-MANDI_PRICE_DATA = [
-    {
-        "id": "mkt-1",
-        "commodity": "Wheat",
-        "variety": "Lokwan Standard",
-        "mandi_name": "Pune Mandi (Gultekdi)",
-        "district": "Pune",
-        "state": "Maharashtra",
-        "min_price": 2480.00,
-        "max_price": 2860.00,
-        "modal_price": 2720.00,
-        "yesterday_price": 2680.00,
-        "price_change_pct": 1.49,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Bullish",
-        "forecast_next_week": 2790.00,
-        "demand_index": "High",
-        "history_7d": [2620, 2640, 2660, 2650, 2680, 2700, 2720],
-        "distance_km": 14
-    },
-    {
-        "id": "mkt-2",
-        "commodity": "Wheat",
-        "variety": "Sharbati Premium",
-        "mandi_name": "Nashik APMC",
-        "district": "Nashik",
-        "state": "Maharashtra",
-        "min_price": 2900.00,
-        "max_price": 3450.00,
-        "modal_price": 3220.00,
-        "yesterday_price": 3150.00,
-        "price_change_pct": 2.22,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Bullish",
-        "forecast_next_week": 3310.00,
-        "demand_index": "Very High",
-        "history_7d": [3080, 3100, 3120, 3140, 3150, 3190, 3220],
-        "distance_km": 65
-    },
-    {
-        "id": "mkt-3",
-        "commodity": "Soybean",
-        "variety": "Yellow Grade-A",
-        "mandi_name": "Latur APMC",
-        "district": "Latur",
-        "state": "Maharashtra",
-        "min_price": 4350.00,
-        "max_price": 4890.00,
-        "modal_price": 4650.00,
-        "yesterday_price": 4620.00,
-        "price_change_pct": 0.65,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Stable",
-        "forecast_next_week": 4680.00,
-        "demand_index": "Moderate",
-        "history_7d": [4590, 4600, 4630, 4620, 4620, 4640, 4650],
-        "distance_km": 110
-    },
-    {
-        "id": "mkt-4",
-        "commodity": "Tomato",
-        "variety": "Hybrid Red",
-        "mandi_name": "Narayangaon Mandi",
-        "district": "Pune",
-        "state": "Maharashtra",
-        "min_price": 1850.00,
-        "max_price": 2550.00,
-        "modal_price": 2150.00,
-        "yesterday_price": 2280.00,
-        "price_change_pct": -5.70,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Bearish",
-        "forecast_next_week": 1950.00,
-        "demand_index": "High Inflow (Surplus)",
-        "history_7d": [2450, 2400, 2350, 2300, 2280, 2220, 2150],
-        "distance_km": 42
-    },
-    {
-        "id": "mkt-5",
-        "commodity": "Onion",
-        "variety": "Nashik Red Export",
-        "mandi_name": "Lasalgaon Mandi",
-        "district": "Nashik",
-        "state": "Maharashtra",
-        "min_price": 1750.00,
-        "max_price": 2450.00,
-        "modal_price": 2180.00,
-        "yesterday_price": 2050.00,
-        "price_change_pct": 6.34,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Bullish",
-        "forecast_next_week": 2360.00,
-        "demand_index": "Very High",
-        "history_7d": [1880, 1920, 1960, 2000, 2050, 2110, 2180],
-        "distance_km": 72
-    },
-    {
-        "id": "mkt-6",
-        "commodity": "Cotton",
-        "variety": "Medium Staple (Shankar-6)",
-        "mandi_name": "Akola Mandi",
-        "district": "Akola",
-        "state": "Maharashtra",
-        "min_price": 6900.00,
-        "max_price": 7650.00,
-        "modal_price": 7320.00,
-        "yesterday_price": 7300.00,
-        "price_change_pct": 0.27,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Stable",
-        "forecast_next_week": 7350.00,
-        "demand_index": "Moderate",
-        "history_7d": [7250, 7270, 7280, 7300, 7300, 7310, 7320],
-        "distance_km": 190
-    },
-    {
-        "id": "mkt-7",
-        "commodity": "Rice (Paddy)",
-        "variety": "Basmati 1121 Pusa",
-        "mandi_name": "Karnal Mandi",
-        "district": "Karnal",
-        "state": "Haryana",
-        "min_price": 3950.00,
-        "max_price": 4550.00,
-        "modal_price": 4310.00,
-        "yesterday_price": 4200.00,
-        "price_change_pct": 2.62,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Bullish",
-        "forecast_next_week": 4440.00,
-        "demand_index": "High",
-        "history_7d": [4120, 4150, 4180, 4200, 4200, 4260, 4310],
-        "distance_km": 140
-    },
-    {
-        "id": "mkt-8",
-        "commodity": "Potato",
-        "variety": "Kufri Jyoti",
-        "mandi_name": "Agra APMC",
-        "district": "Agra",
-        "state": "Uttar Pradesh",
-        "min_price": 1150.00,
-        "max_price": 1600.00,
-        "modal_price": 1420.00,
-        "yesterday_price": 1390.00,
-        "price_change_pct": 2.16,
-        "price_unit": "₹/Quintal",
-        "price_trend": "Stable",
-        "forecast_next_week": 1450.00,
-        "demand_index": "Normal",
-        "history_7d": [1340, 1360, 1370, 1380, 1390, 1400, 1420],
-        "distance_km": 95
-    }
+# Supported Crops as requested
+SUPPORTED_MARKET_CROPS = ["Tomato", "Potato", "Onion", "Wheat", "Rice", "Maize"]
+
+# Major APMC Mandi Hubs
+MANDI_LOCATIONS = [
+    {"id": "patna", "name": "Patna Mandi", "location": "Patna, Bihar", "state": "Bihar"},
+    {"id": "pune", "name": "Pune Mandi (Gultekdi)", "location": "Pune, Maharashtra", "state": "Maharashtra"},
+    {"id": "nashik", "name": "Nashik APMC", "location": "Nashik, Maharashtra", "state": "Maharashtra"},
+    {"id": "lasalgaon", "name": "Lasalgaon Mandi", "location": "Nashik, Maharashtra", "state": "Maharashtra"},
+    {"id": "karnal", "name": "Karnal APMC", "location": "Karnal, Haryana", "state": "Haryana"},
+    {"id": "agra", "name": "Agra APMC", "location": "Agra, Uttar Pradesh", "state": "Uttar Pradesh"},
+    {"id": "latur", "name": "Latur APMC", "location": "Latur, Maharashtra", "state": "Maharashtra"},
+    {"id": "akola", "name": "Akola Mandi", "location": "Akola, Maharashtra", "state": "Maharashtra"},
+    {"id": "indore", "name": "Indore APMC", "location": "Indore, Madhya Pradesh", "state": "Madhya Pradesh"}
 ]
 
-def get_all_prices(commodity=None, state=None, search=None):
-    """Filter market prices by commodity name, state, or search text."""
-    data = MANDI_PRICE_DATA
-    if commodity and commodity != "All":
-        data = [item for item in data if item["commodity"].lower() == commodity.lower()]
-    if state and state != "All":
-        data = [item for item in data if item["state"].lower() == state.lower()]
-    if search:
-        s = search.lower().strip()
-        data = [item for item in data if s in item["commodity"].lower() or s in item["mandi_name"].lower() or s in item["district"].lower()]
-    return data
+# Baseline price matrix per crop and location (for demo & fallback)
+CROP_BASE_PRICES = {
+    "Tomato": {
+        "Patna, Bihar": {"base": 2200, "trend_slope": 1.08, "volatility": 45},  # +8% rising trend (PPT example)
+        "Pune, Maharashtra": {"base": 2150, "trend_slope": 0.94, "volatility": 40},  # -6% falling trend
+        "default": {"base": 2180, "trend_slope": 1.04, "volatility": 35}
+    },
+    "Potato": {
+        "Agra, Uttar Pradesh": {"base": 1420, "trend_slope": 1.01, "volatility": 15},  # Stable trend
+        "Patna, Bihar": {"base": 1480, "trend_slope": 1.03, "volatility": 20},
+        "default": {"base": 1450, "trend_slope": 1.01, "volatility": 18}
+    },
+    "Onion": {
+        "Nashik, Maharashtra": {"base": 2180, "trend_slope": 1.12, "volatility": 65}, # +12% strong rising
+        "Patna, Bihar": {"base": 2350, "trend_slope": 1.09, "volatility": 50},
+        "default": {"base": 2200, "trend_slope": 1.10, "volatility": 55}
+    },
+    "Wheat": {
+        "Pune, Maharashtra": {"base": 2720, "trend_slope": 1.03, "volatility": 25}, # +3% rising
+        "Karnal, Haryana": {"base": 2680, "trend_slope": 1.02, "volatility": 20},
+        "Patna, Bihar": {"base": 2640, "trend_slope": 1.02, "volatility": 22},
+        "default": {"base": 2690, "trend_slope": 1.02, "volatility": 20}
+    },
+    "Rice": {
+        "Karnal, Haryana": {"base": 4310, "trend_slope": 1.04, "volatility": 45},
+        "Patna, Bihar": {"base": 3950, "trend_slope": 1.02, "volatility": 35},
+        "default": {"base": 4150, "trend_slope": 1.03, "volatility": 40}
+    },
+    "Maize": {
+        "Latur, Maharashtra": {"base": 2150, "trend_slope": 0.96, "volatility": 30}, # -4% falling trend
+        "Patna, Bihar": {"base": 2100, "trend_slope": 0.98, "volatility": 25},
+        "default": {"base": 2120, "trend_slope": 0.97, "volatility": 28}
+    }
+}
 
-def calculate_mandi_arbitrage(commodity, quantity_quintals=50, transport_cost_per_km=15):
+DATA_SOURCE_LABEL = "Demo Market Data (Agri-Market Prototype Feed)"
+
+def generate_historical_prices(crop_name, location_name, days=30):
     """
-    Compares prices across nearby mandis and calculates net earnings after logistics.
+    Generates structured daily historical price series for the specified timeframe.
     """
-    matches = [item for item in MANDI_PRICE_DATA if item["commodity"].lower() == commodity.lower()]
-    if not matches:
-        matches = [item for item in MANDI_PRICE_DATA if item["commodity"].lower() == "wheat"]
+    # Normalize crop & location
+    crop_key = "Tomato"
+    for c in SUPPORTED_MARKET_CROPS:
+        if crop_name and crop_name.lower() in c.lower():
+            crop_key = c
+            break
+
+    loc_key = "default"
+    for loc, data in CROP_BASE_PRICES.get(crop_key, {}).items():
+        if loc.lower() in (location_name or "").lower():
+            loc_key = loc
+            break
+
+    profile = CROP_BASE_PRICES.get(crop_key, {}).get(loc_key, CROP_BASE_PRICES.get(crop_key, {}).get("default", {"base": 2200, "trend_slope": 1.04, "volatility": 30}))
+
+    current_price = profile["base"]
+    trend_slope = profile["trend_slope"]  # overall multiplier over 30 days
+    volatility = profile["volatility"]
+
+    # Calculate starting price `days` ago
+    start_price = current_price / (1 + (trend_slope - 1) * (days / 30.0))
+
+    # Deterministic daily fluctuation hash seed based on crop & location
+    seed = int(hashlib.md5(f"{crop_key}_{location_name}".encode()).hexdigest()[:6], 16)
+
+    series = []
+    today = datetime.now()
+
+    for i in range(days):
+        day_offset = days - 1 - i
+        dt = today - timedelta(days=day_offset)
+        progress = i / max(1, days - 1)  # 0 to 1
+
+        # Smooth linear trend progression
+        interp_price = start_price + (current_price - start_price) * progress
+
+        # Add realistic micro-market oscillation (sinusoidal + pseudo-noise)
+        oscillation = math.sin((i + (seed % 10)) * 0.7) * (volatility * 0.6)
         
-    analysis = []
-    for m in matches:
-        gross_revenue = m["modal_price"] * quantity_quintals
-        transport_cost = m["distance_km"] * transport_cost_per_km * 2 # Round trip transport
+        # Last day is exact current price
+        if i == days - 1:
+            p_val = current_price
+        else:
+            p_val = round(interp_price + oscillation)
+
+        series.append({
+            "date": dt.strftime("%Y-%m-%d"),
+            "formatted_date": dt.strftime("%d %b"),
+            "price": p_val
+        })
+
+    return crop_key, series, profile
+
+def get_market_analysis(crop_name="Tomato", location="Patna Mandi, Bihar", days=30):
+    """
+    Executes Market Intelligence Decision Engine:
+    Calculates 7/15/30-day percentage changes, average/high/low prices,
+    transparent estimated ranges, and explainable recommendations (SELL / MONITOR / WAIT).
+    """
+    try:
+        days = int(days)
+        if days not in [7, 15, 30]:
+            days = 30
+    except (ValueError, TypeError):
+        days = 30
+
+    crop_key, series, profile = generate_historical_prices(crop_name, location, days=days)
+
+    prices_list = [item["price"] for item in series]
+    current_price = prices_list[-1]
+    first_price = prices_list[0]
+
+    # Percentage change
+    percentage_change = round(((current_price - first_price) / first_price) * 100, 2)
+
+    # High, Low, Average
+    high_price = max(prices_list)
+    low_price = min(prices_list)
+    average_price = round(sum(prices_list) / len(prices_list), 2)
+
+    # Estimated Price Range (Transparent calculation based on slope & volatility)
+    if percentage_change >= 4.0:
+        trend = "Rising"
+        estimated_min = round(current_price * 1.03)
+        estimated_max = round(current_price * 1.12)
+        recommendation = "MONITOR / WAIT"
+        explanation = f"Prices have risen {percentage_change}% over the past {days} days with strong mandi buying demand. Consider monitoring closely or waiting to capture potential peak realization before dispatching full crop volume."
+    elif percentage_change <= -3.0:
+        trend = "Falling"
+        estimated_min = round(current_price * 0.90)
+        estimated_max = round(current_price * 0.98)
+        recommendation = "SELL"
+        explanation = f"Prices have declined {abs(percentage_change)}% over the past {days} days due to heavy harvest arrivals and supply surplus. Selling available produce promptly may prevent further price decay."
+    else:
+        trend = "Stable"
+        estimated_min = round(current_price * 0.97)
+        estimated_max = round(current_price * 1.04)
+        recommendation = "MONITOR"
+        explanation = f"Market is relatively stable with minimal fluctuation ({percentage_change}% over {days} days). Monitor daily mandi arrivals and dispatch produce steadily based on storage feasibility."
+
+    result = {
+        "crop": crop_key,
+        "location": location,
+        "days": days,
+        "current_price": current_price,
+        "historical_prices": series,
+        "percentage_change": percentage_change,
+        "average_price": average_price,
+        "high_price": high_price,
+        "low_price": low_price,
+        "estimated_min": estimated_min,
+        "estimated_max": estimated_max,
+        "trend": trend,
+        "recommendation": recommendation,
+        "explanation": explanation,
+        "data_source": DATA_SOURCE_LABEL,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    return result
+
+def get_all_prices(crop=None, location=None, days=30):
+    """Returns price comparison across multiple active mandis."""
+    target_crop = crop or "Tomato"
+    results = []
+
+    for loc in MANDI_LOCATIONS:
+        analysis = get_market_analysis(crop_name=target_crop, location=loc["location"], days=days)
+        results.append({
+            "id": f"mkt-{loc['id']}",
+            "commodity": target_crop,
+            "mandi_name": loc["name"],
+            "location": loc["location"],
+            "state": loc["state"],
+            "modal_price": analysis["current_price"],
+            "percentage_change": analysis["percentage_change"],
+            "trend": analysis["trend"],
+            "recommendation": analysis["recommendation"],
+            "high_price": analysis["high_price"],
+            "low_price": analysis["low_price"],
+            "estimated_range": f"₹{analysis['estimated_min']} – ₹{analysis['estimated_max']}"
+        })
+
+    return results
+
+def calculate_mandi_arbitrage(commodity="Wheat", quantity_quintals=50, transport_cost_per_km=15):
+    """
+    Compares prices across nearby mandis and calculates net earnings after deducting logistics.
+    """
+    distances = {
+        "patna": 12,
+        "pune": 14,
+        "nashik": 65,
+        "lasalgaon": 72,
+        "karnal": 110,
+        "agra": 95,
+        "latur": 115,
+        "akola": 180,
+        "indore": 130
+    }
+
+    active_crop = commodity if commodity in SUPPORTED_MARKET_CROPS else "Wheat"
+    analysis_list = []
+
+    for loc in MANDI_LOCATIONS[:6]:
+        dist = distances.get(loc["id"], 40)
+        data = get_market_analysis(crop_name=active_crop, location=loc["location"], days=30)
+        rate = data["current_price"]
+
+        gross_revenue = rate * quantity_quintals
+        transport_cost = dist * transport_cost_per_km * 2  # Round trip transport
         net_revenue = gross_revenue - transport_cost
-        net_rate_per_quintal = net_revenue / quantity_quintals if quantity_quintals else 0
-        
-        analysis.append({
-            "mandi_name": m["mandi_name"],
-            "district": m["district"],
-            "modal_price": m["modal_price"],
-            "distance_km": m["distance_km"],
+        net_rate = round(net_revenue / quantity_quintals, 2) if quantity_quintals else 0
+
+        analysis_list.append({
+            "mandi_name": loc["name"],
+            "location": loc["location"],
+            "modal_price": rate,
+            "distance_km": dist,
             "gross_revenue": gross_revenue,
             "estimated_transport": transport_cost,
             "net_revenue": net_revenue,
-            "net_effective_price": round(net_rate_per_quintal, 2),
-            "recommendation": "Best Profit Margin" if m == matches[0] else "Alternative"
+            "net_effective_price": net_rate,
+            "recommendation": "Alternative"
         })
-        
-    analysis.sort(key=lambda x: x["net_revenue"], reverse=True)
-    if analysis:
-        analysis[0]["recommendation"] = "Highest Net Profit (Recommended)"
-        
-    return analysis
+
+    analysis_list.sort(key=lambda x: x["net_revenue"], reverse=True)
+    if analysis_list:
+        analysis_list[0]["recommendation"] = "Highest Net Profit (Recommended)"
+
+    return analysis_list
+
+def get_supported_crops():
+    """Returns supported market crop list."""
+    return SUPPORTED_MARKET_CROPS
+
+def get_supported_locations():
+    """Returns supported mandi hubs list."""
+    return MANDI_LOCATIONS

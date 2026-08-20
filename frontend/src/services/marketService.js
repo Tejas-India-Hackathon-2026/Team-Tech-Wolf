@@ -1,6 +1,22 @@
 import { request } from './api';
 
 export const marketService = {
+  /**
+   * Primary endpoint for comprehensive market trend and decision analysis:
+   * GET /api/market/analysis?crop=...&location=...&days=...
+   */
+  async getAnalysis(crop = 'Tomato', location = 'Patna Mandi, Bihar', days = 30) {
+    try {
+      return await request(`/market/analysis?crop=${encodeURIComponent(crop)}&location=${encodeURIComponent(location)}&days=${days}`);
+    } catch (err) {
+      console.warn('[MarketService] Backend /market/analysis fallback:', err.message);
+      return getClientFallbackMarketAnalysis(crop, location, days);
+    }
+  },
+
+  /**
+   * Compare prices across mandis: GET /api/market/prices
+   */
   async getPrices(params = {}) {
     const query = new URLSearchParams(params).toString();
     try {
@@ -8,151 +24,193 @@ export const marketService = {
     } catch {
       return [
         {
-          id: 'mkt-1',
-          commodity: 'Wheat',
-          variety: 'Lokwan Standard',
+          id: 'mkt-patna',
+          commodity: params.crop || 'Tomato',
+          mandi_name: 'Patna Mandi',
+          location: 'Patna, Bihar',
+          state: 'Bihar',
+          modal_price: 2200,
+          percentage_change: 7.84,
+          trend: 'Rising',
+          recommendation: 'MONITOR / WAIT',
+          high_price: 2240,
+          low_price: 2020,
+          estimated_range: '₹2,300 – ₹2,500'
+        },
+        {
+          id: 'mkt-pune',
+          commodity: params.crop || 'Tomato',
           mandi_name: 'Pune Mandi (Gultekdi)',
-          district: 'Pune',
+          location: 'Pune, Maharashtra',
           state: 'Maharashtra',
-          min_price: 2480,
-          max_price: 2860,
-          modal_price: 2720,
-          yesterday_price: 2680,
-          price_change_pct: 1.49,
-          price_unit: '₹/Quintal',
-          price_trend: 'Bullish',
-          forecast_next_week: 2790,
-          demand_index: 'High',
-          history_7d: [2620, 2640, 2660, 2650, 2680, 2700, 2720],
-          distance_km: 14
-        },
-        {
-          id: 'mkt-2',
-          commodity: 'Wheat',
-          variety: 'Sharbati Premium',
-          mandi_name: 'Nashik APMC',
-          district: 'Nashik',
-          state: 'Maharashtra',
-          min_price: 2900,
-          max_price: 3450,
-          modal_price: 3220,
-          yesterday_price: 3150,
-          price_change_pct: 2.22,
-          price_unit: '₹/Quintal',
-          price_trend: 'Bullish',
-          forecast_next_week: 3310,
-          demand_index: 'Very High',
-          history_7d: [3080, 3100, 3120, 3140, 3150, 3190, 3220],
-          distance_km: 65
-        },
-        {
-          id: 'mkt-3',
-          commodity: 'Soybean',
-          variety: 'Yellow Grade-A',
-          mandi_name: 'Latur APMC',
-          district: 'Latur',
-          state: 'Maharashtra',
-          min_price: 4350,
-          max_price: 4890,
-          modal_price: 4650,
-          yesterday_price: 4620,
-          price_change_pct: 0.65,
-          price_unit: '₹/Quintal',
-          price_trend: 'Stable',
-          forecast_next_week: 4680,
-          demand_index: 'Moderate',
-          history_7d: [4590, 4600, 4630, 4620, 4620, 4640, 4650],
-          distance_km: 110
-        },
-        {
-          id: 'mkt-4',
-          commodity: 'Tomato',
-          variety: 'Hybrid Red',
-          mandi_name: 'Narayangaon Mandi',
-          district: 'Pune',
-          state: 'Maharashtra',
-          min_price: 1850,
-          max_price: 2550,
           modal_price: 2150,
-          yesterday_price: 2280,
-          price_change_pct: -5.70,
-          price_unit: '₹/Quintal',
-          price_trend: 'Bearish',
-          forecast_next_week: 1950,
-          demand_index: 'Surplus Inflow',
-          history_7d: [2450, 2400, 2350, 2300, 2280, 2220, 2150],
-          distance_km: 42
+          percentage_change: -5.70,
+          trend: 'Falling',
+          recommendation: 'SELL',
+          high_price: 2350,
+          low_price: 2100,
+          estimated_range: '₹1,950 – ₹2,100'
         },
         {
-          id: 'mkt-5',
-          commodity: 'Onion',
-          variety: 'Nashik Red Export',
-          mandi_name: 'Lasalgaon Mandi',
-          district: 'Nashik',
+          id: 'mkt-nashik',
+          commodity: params.crop || 'Tomato',
+          mandi_name: 'Nashik APMC',
+          location: 'Nashik, Maharashtra',
           state: 'Maharashtra',
-          min_price: 1750,
-          max_price: 2450,
-          modal_price: 2180,
-          yesterday_price: 2050,
-          price_change_pct: 6.34,
-          price_unit: '₹/Quintal',
-          price_trend: 'Bullish',
-          forecast_next_week: 2360,
-          demand_index: 'Very High',
-          history_7d: [1880, 1920, 1960, 2000, 2050, 2110, 2180],
-          distance_km: 72
-        },
-        {
-          id: 'mkt-6',
-          commodity: 'Cotton',
-          variety: 'Medium Staple (Shankar-6)',
-          mandi_name: 'Akola Mandi',
-          district: 'Akola',
-          state: 'Maharashtra',
-          min_price: 6900,
-          max_price: 7650,
-          modal_price: 7320,
-          yesterday_price: 7300,
-          price_change_pct: 0.27,
-          price_unit: '₹/Quintal',
-          price_trend: 'Stable',
-          forecast_next_week: 7350,
-          demand_index: 'Moderate',
-          history_7d: [7250, 7270, 7280, 7300, 7300, 7310, 7320],
-          distance_km: 190
+          modal_price: 2240,
+          percentage_change: 3.20,
+          trend: 'Rising',
+          recommendation: 'MONITOR / WAIT',
+          high_price: 2280,
+          low_price: 2150,
+          estimated_range: '₹2,300 – ₹2,450'
         }
       ];
     }
   },
 
+  /**
+   * Calculate logistics arbitrage: GET /api/market/arbitrage
+   */
   async getArbitrage(commodity = 'Wheat', quantity = 50, transportRate = 15) {
     try {
       return await request(`/market/arbitrage?commodity=${encodeURIComponent(commodity)}&quantity_quintals=${quantity}&transport_cost_per_km=${transportRate}`);
     } catch {
       return [
         {
-          mandi_name: 'Pune Mandi (Gultekdi)',
-          district: 'Pune',
-          modal_price: 2720,
-          distance_km: 14,
-          gross_revenue: 2720 * quantity,
-          estimated_transport: 14 * transportRate * 2,
-          net_revenue: (2720 * quantity) - (14 * transportRate * 2),
-          net_effective_price: 2711.6,
+          mandi_name: 'Patna Mandi',
+          location: 'Patna, Bihar',
+          modal_price: 2640,
+          distance_km: 12,
+          gross_revenue: 2640 * quantity,
+          estimated_transport: 12 * transportRate * 2,
+          net_revenue: (2640 * quantity) - (12 * transportRate * 2),
+          net_effective_price: 2632.8,
           recommendation: 'Highest Net Profit (Recommended)'
         },
         {
-          mandi_name: 'Nashik APMC',
-          district: 'Nashik',
-          modal_price: 3220,
-          distance_km: 65,
-          gross_revenue: 3220 * quantity,
-          estimated_transport: 65 * transportRate * 2,
-          net_revenue: (3220 * quantity) - (65 * transportRate * 2),
-          net_effective_price: 3181.0,
-          recommendation: 'High Gross Rate (Factor Fuel)'
+          mandi_name: 'Pune Mandi (Gultekdi)',
+          location: 'Pune, Maharashtra',
+          modal_price: 2720,
+          distance_km: 45,
+          gross_revenue: 2720 * quantity,
+          estimated_transport: 45 * transportRate * 2,
+          net_revenue: (2720 * quantity) - (45 * transportRate * 2),
+          net_effective_price: 2693.0,
+          recommendation: 'Alternative'
         }
+      ];
+    }
+  },
+
+  /**
+   * List supported crops: GET /api/market/crops
+   */
+  async getCrops() {
+    try {
+      return await request('/market/crops');
+    } catch {
+      return ['Tomato', 'Potato', 'Onion', 'Wheat', 'Rice', 'Maize'];
+    }
+  },
+
+  /**
+   * List supported locations: GET /api/market/locations
+   */
+  async getLocations() {
+    try {
+      return await request('/market/locations');
+    } catch {
+      return [
+        { id: 'patna', name: 'Patna Mandi', location: 'Patna, Bihar', state: 'Bihar' },
+        { id: 'pune', name: 'Pune Mandi (Gultekdi)', location: 'Pune, Maharashtra', state: 'Maharashtra' },
+        { id: 'nashik', name: 'Nashik APMC', location: 'Nashik, Maharashtra', state: 'Maharashtra' },
+        { id: 'lasalgaon', name: 'Lasalgaon Mandi', location: 'Nashik, Maharashtra', state: 'Maharashtra' },
+        { id: 'karnal', name: 'Karnal APMC', location: 'Karnal, Haryana', state: 'Haryana' },
+        { id: 'agra', name: 'Agra APMC', location: 'Agra, Uttar Pradesh', state: 'Uttar Pradesh' },
+        { id: 'latur', name: 'Latur APMC', location: 'Latur, Maharashtra', state: 'Maharashtra' }
       ];
     }
   }
 };
+
+/**
+ * Structured Client-Side Fallback Generator
+ */
+function getClientFallbackMarketAnalysis(crop, location, days = 30) {
+  const cropLower = (crop || 'Tomato').toLowerCase();
+  const numDays = Number(days) || 30;
+
+  let currentPrice = 2200;
+  let pctChange = 7.84;
+  let trend = 'Rising';
+  let rec = 'MONITOR / WAIT';
+  let explanation = 'Prices have risen 8% over the past 30 days due to steady retail demand. Consider monitoring closely or waiting to capture potential peak realization before dispatching full crop volume.';
+  let estMin = 2300;
+  let estMax = 2500;
+
+  if (cropLower.includes('potato')) {
+    currentPrice = 1420;
+    pctChange = 1.43;
+    trend = 'Stable';
+    rec = 'MONITOR';
+    explanation = 'Market is relatively stable with balanced cold-storage releases and steady consumption. Monitor daily arrivals.';
+    estMin = 1380;
+    estMax = 1460;
+  } else if (cropLower.includes('onion')) {
+    currentPrice = 2180;
+    pctChange = 11.22;
+    trend = 'Rising';
+    rec = 'MONITOR / WAIT';
+    explanation = 'Strong upward price pressure observed in major export and consumption clusters. Prices may test higher resistance levels.';
+    estMin = 2250;
+    estMax = 2450;
+  } else if (cropLower.includes('maize')) {
+    currentPrice = 2150;
+    pctChange = -4.44;
+    trend = 'Falling';
+    rec = 'SELL';
+    explanation = 'Prices appear to be declining over recent sessions due to peak seasonal harvest arrivals. Selling available stock promptly is recommended.';
+    estMin = 1950;
+    estMax = 2100;
+  }
+
+  // Generate date series
+  const series = [];
+  const today = new Date();
+  const startPrice = currentPrice / (1 + (pctChange / 100));
+
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (numDays - 1 - i));
+    const prog = i / Math.max(1, numDays - 1);
+    const p = i === numDays - 1 ? currentPrice : Math.round(startPrice + (currentPrice - startPrice) * prog + Math.sin(i * 0.8) * 20);
+
+    series.push({
+      date: d.toISOString().split('T')[0],
+      formatted_date: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      price: p
+    });
+  }
+
+  const pList = series.map((s) => s.price);
+
+  return {
+    crop: crop || 'Tomato',
+    location: location || 'Patna Mandi, Bihar',
+    days: numDays,
+    current_price: currentPrice,
+    historical_prices: series,
+    percentage_change: pctChange,
+    average_price: Math.round(pList.reduce((a, b) => a + b, 0) / pList.length),
+    high_price: Math.max(...pList),
+    low_price: Math.min(...pList),
+    estimated_min: estMin,
+    estimated_max: estMax,
+    trend: trend,
+    recommendation: rec,
+    explanation: explanation,
+    data_source: 'Demo Market Data (Agri-Market Prototype Feed)',
+    timestamp: new Date().toLocaleString()
+  };
+}
