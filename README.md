@@ -10,24 +10,36 @@
 ### The Problem It Solves
 Smallholder farmers frequently face fragmented agricultural tools, inaccessible expert diagnostics, sudden meteorological crop damage, prohibitive equipment ownership costs, and volatile commodity price discovery. AGRO-SMART consolidates these essential agricultural workflows into a single, intuitive platform to reduce crop losses and improve farm profitability.
 
-### Four Core Modules
-1. **AI Crop Disease Detection & Auto Identification**:
-   - Multimodal vision analysis supporting Auto Crop Detection across major crops (*Tomato, Potato, Rice, Wheat, Cotton, Corn/Maize*).
-   - Strict non-plant image validation, image quality checks, severity rating, observable signs, actionable remedies, cultural prevention steps, and regional Hindi advisory (*किसान सलाह*).
-2. **Weather Risk Intelligence**:
-   - Converts raw meteorological forecasts (temperature, relative humidity, precipitation probability, wind) into crop-specific agronomic risk indicators.
-   - Evaluates fungal incubation risk windows, heat stress thresholds, and 7-day foliar spray suitability conditions.
-3. **Machinery Rental Marketplace ("Uber for Tractors")**:
-   - Location-aware equipment rental marketplace connecting smallholders with local tractor, harvester, rotavator, and cultivator owners.
-   - Dynamic hourly rate calculation, status synchronization (`Pending`, `Accepted`, `Completed`, `Cancelled`), and double-booking prevention.
-4. **Market Intelligence & Price Analytics**:
-   - Real-time APMC mandi spot prices, historical price trend graphs (7, 15, 30 days), freight arbitrage comparison, and explainable **SELL / HOLD** recommendations.
-
 > [!NOTE]
 > **Hackathon MVP Status**: AGRO-SMART is currently developed as a hackathon MVP prototype demonstrating full-stack workflow integration across vision AI, weather intelligence, equipment sharing, and market analytics.
 
 > [!IMPORTANT]
 > **Safety & AI Decision Support Disclaimer**: AI-generated pathology detections and predictive insights provide preliminary decision support only and do not constitute a guaranteed agronomic diagnosis. Farmers should consult local Krishi Vigyan Kendra (KVK) experts or agricultural extension officers prior to applying major chemical treatments or operational interventions.
+
+---
+
+## Core Platform Features
+
+### 1. AI Crop Disease Detection
+- **Gemini Multimodal Image Analysis**: Deep foliar vision processing executed on the secure Flask backend without frontend exposure.
+- **Auto Crop Detection**: Automatically identifies crop species (*Tomato, Potato, Rice, Wheat, Cotton, Corn/Maize*) directly from uploaded photos.
+- **Non-Plant Image Rejection**: Strict validation hard gate that blocks non-plant images (laptops, vehicles, objects) and prevents false-positive diagnoses.
+- **Preliminary Disease Guidance**: Delivers observable pathology signs, actionable chemical/organic remedies with generic dosages, cultural prevention practices, and regional Hindi advisory (*किसान सलाह*).
+
+### 2. Weather Risk Intelligence
+- **Live Weather Architecture**: Hyperlocal meteorological integration via Open-Meteo API covering temperature, relative humidity, wind speed, and precipitation probability.
+- **Crop-Specific Weather Interpretation**: Custom rules engine translating meteorological parameters into agronomic risk metrics (e.g. fungal incubation risks, terminal heat stress, frost warnings).
+- **Actionable Weather-Risk Recommendations**: Clear spray suitability forecasting, field task guidance, and real-time risk alerts.
+
+### 3. Machinery Rental Marketplace
+- **Machinery Discovery**: Location-aware equipment catalog connecting smallholder farmers with nearby tractors, harvesters, rotavators, and implements.
+- **Booking Workflow**: Transparent hours-to-cost computation, date/duration scheduling, and server-side rate verification.
+- **Farmer ↔ Machinery Owner Status Synchronization**: Real-time status tracking (`Pending`, `Accepted`, `Completed`, `Cancelled`) with in-app notification alerts and double-booking prevention.
+
+### 4. Market Intelligence
+- **Crop Price Information**: Real-time APMC mandi modal, minimum, and maximum spot price discovery across Indian agricultural markets.
+- **Historical Trends**: Interactive multi-day trend graphs (7, 15, 30 days) and price change momentum tracking.
+- **Decision-Support Recommendations**: Explainable decision guidance (**SELL**, **MONITOR**, **HOLD**) with multi-mandi freight arbitrage analysis.
 
 ---
 
