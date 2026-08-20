@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Tractor, 
   MapPin, 
@@ -27,6 +28,7 @@ import {
 import { machineryService } from '../services/machineryService';
 import { formatCurrency, formatDistance } from '../utils/formatters';
 import { useGeolocation } from '../hooks/useGeolocation';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 
@@ -45,6 +47,10 @@ const PRESET_LOCATIONS = [
 ];
 
 const MachineryRentalPage = () => {
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [machineryList, setMachineryList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedType, setSelectedType] = useState('All');
@@ -55,9 +61,9 @@ const MachineryRentalPage = () => {
   // Booking Modal State
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [farmerName, setFarmerName] = useState('');
-  const [farmerPhone, setFarmerPhone] = useState('');
-  const [serviceLocation, setServiceLocation] = useState('Patna Rural, Bihar');
+  const [farmerName, setFarmerName] = useState(user?.name || '');
+  const [farmerPhone, setFarmerPhone] = useState(user?.phone || '');
+  const [serviceLocation, setServiceLocation] = useState(user ? `${user.district || 'Pune'}, ${user.state || 'Maharashtra'}` : 'Patna Rural, Bihar');
   const [bookingDate, setBookingDate] = useState('2026-08-22');
   const [startTime, setStartTime] = useState('08:00 AM');
   const [estimatedHours, setEstimatedHours] = useState(4);
@@ -101,6 +107,11 @@ const MachineryRentalPage = () => {
   useEffect(() => {
     fetchMachinery();
     fetchBookings();
+
+    // Check if returning from login redirect with target equipment
+    if (location.state?.targetEquipment && isAuthenticated) {
+      handleOpenBooking(location.state.targetEquipment);
+    }
   }, [selectedType, selectedSort]);
 
   const handleSearchSubmit = (e) => {
@@ -109,10 +120,17 @@ const MachineryRentalPage = () => {
   };
 
   const handleOpenBooking = (equipment) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location, targetEquipment: equipment, action: 'open_booking' } });
+      return;
+    }
+
     setSelectedEquipment(equipment);
+    setFarmerName(user?.name || '');
+    setFarmerPhone(user?.phone || '');
+    setServiceLocation(equipment.location || (user ? `${user.district}, ${user.state}` : 'Local Farm Plot'));
     setBookingSuccess(null);
     setBookingError(null);
-    setServiceLocation(equipment.location || 'Local Farm Plot');
     setIsModalOpen(true);
   };
 

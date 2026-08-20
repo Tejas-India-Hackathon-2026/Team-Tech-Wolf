@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import Route Blueprints
+from routes.auth_routes import auth_bp
 from routes.disease_routes import disease_bp
 from routes.weather_routes import weather_bp
 from routes.machinery_routes import machinery_bp
@@ -31,7 +32,8 @@ def create_app():
     ]
     CORS(app, resources={r"/api/*": {"origins": allowed_origins, "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]}})
 
-    # Register Blueprints for the 4 Core Agricultural Services
+    # Register Blueprints for Core Agricultural & Auth Services
+    app.register_blueprint(auth_bp)
     app.register_blueprint(disease_bp)
     app.register_blueprint(weather_bp)
     app.register_blueprint(machinery_bp)
@@ -45,6 +47,7 @@ def create_app():
             "status": "online",
             "version": "1.0.0",
             "services": [
+                "/api/auth",
                 "/api/disease",
                 "/api/weather",
                 "/api/machinery",
