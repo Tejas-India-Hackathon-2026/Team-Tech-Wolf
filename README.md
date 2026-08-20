@@ -43,31 +43,60 @@ Smallholder farmers frequently face fragmented agricultural tools, inaccessible 
 
 ---
 
-## 🏗️ Architecture & Data Flow
+## 🏗️ System Architecture
+
+### Request Flow & Pipeline
 
 ```text
+User (Farmer / Owner / Admin)
+             │
+             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 React + Vite Frontend (SPA)                 │
-│  - Light Agriculture Theme (Tailored HSL & Contrast tokens) │
-│  - Centralized Service Layer (frontend/src/services/)       │
+│  - Responsive Light Theme UI (Tailored Tokens & Accessible) │
+│  - Centralized Client Service Layer (src/services/)         │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ JSON / multipart/form-data
+                               │ HTTP / JSON / multipart/form-data
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 Flask REST API (Python 3)                   │
-│  - Input validation, safe CORS & error sanitization         │
-│  - Multi-crop pathology & crop-risk rules engines           │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │                              │
-               ▼                              ▼
-┌─────────────────────────────┐ ┌─────────────────────────────┐
-│  Live Open-Meteo & AI APIs  │ │    Supabase PostgreSQL      │
-│  - Hyperlocal agro weather  │ │  - disease_scans            │
-│  - Pathology classifiers    │ │  - weather_checks           │
-│                             │ │  - machinery & bookings     │
-│                             │ │  - market_prices            │
-└─────────────────────────────┘ └─────────────────────────────┘
+│                 REST API Layer (Flask Blueprints)           │
+│  - Route Controllers (/api/auth, /api/disease, /api/weather)│
+│  - Input Validation, Safe CORS & Sanitized Error Handlers   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Backend Service Layer                       │
+│  - gemini_disease_service.py  • weather_service.py          │
+│  - machinery_service.py       • market_service.py           │
+│  - auth_service.py            • notification_service.py     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 External & Data Services                    │
+│  - Google Gemini Multimodal Vision API                      │
+│  - Open-Meteo Hyperlocal Agro-Weather API                   │
+│  - AgMarket / APMC Mandi Price Feeds                        │
+│  - Supabase PostgreSQL / Local In-Memory Demo Store         │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Major Service Integrations
+
+1. **Gemini Multimodal Vision (`gemini_disease_service.py`)**:
+   - Backend-only vision pipeline performing sequential plant verification, image quality assessment, auto crop identification, crop mismatch checking, and disease diagnostics.
+2. **Weather Risk Intelligence (`weather_service.py`)**:
+   - Live meteorological ingestion from Open-Meteo with algorithmic translation into agronomic risk metrics (fungal incubation, heat stress, spray windows).
+3. **Market Intelligence Service (`market_service.py`)**:
+   - APMC mandi spot price discovery, multi-day historical trend analysis, and explainable SELL/HOLD decision support with freight arbitrage computation.
+4. **Data Layer with Supabase Compatibility (`models/`)**:
+   - Structured PostgreSQL schema designed for persistent entities (`disease_scans`, `weather_checks`, `machinery`, `bookings`, `market_prices`) with built-in in-memory fallback stores for self-contained hackathon evaluation.
+5. **Authentication & Role-Based Workflows (`auth_service.py`)**:
+   - Role-segregated user sessions with dedicated dashboard routing and permission controls for **Farmers**, **Machinery Owners**, and **Admins**.
+
+### Architectural Decoupling & Replaceability
+AGRO-SMART strictly separates **Frontend UI components**, **REST API route controllers**, and **Backend Service adapters**. This modular architecture ensures external third-party providers (e.g. Gemini Vision, live weather feeds, payment gateways, or production Supabase Auth) can be seamlessly updated, swapped, or extended without modifying client views or redesigning the overarching application.
 
 ---
 
