@@ -10,6 +10,7 @@ import MarketIntelligencePage from './pages/MarketIntelligencePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 
@@ -31,12 +32,22 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             
-            {/* Protected Dashboard Route */}
+            {/* Protected User Dashboard Route */}
             <Route 
               path="/dashboard" 
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Protected Admin Dashboard Route */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute allowedRoles={['Admin']}>
+                  <AdminDashboardPage />
                 </ProtectedRoute>
               } 
             />

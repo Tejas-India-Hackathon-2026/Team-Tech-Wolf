@@ -15,7 +15,10 @@ import {
   History,
   LogOut,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  Users,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,7 +27,7 @@ const Navbar = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
   // Close dropdown on outside click
@@ -100,15 +103,15 @@ const Navbar = () => {
                   gap: '0.5rem',
                   padding: '0.4rem 0.75rem',
                   borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-green)',
+                  border: `1px solid ${isAdmin ? '#fca5a5' : 'var(--border-green)'}`,
                   background: '#ffffff',
                   cursor: 'pointer',
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <span style={{ fontSize: '1.1rem' }}>{user.avatar || '👨‍🌾'}</span>
+                <span style={{ fontSize: '1.1rem' }}>{user.avatar || (isAdmin ? '🛡️' : '👨‍🌾')}</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-                  {user.name.split(' ')[0]}
+                  {isAdmin ? 'Admin' : user.name.split(' ')[0]}
                 </span>
                 <ChevronDown size={14} style={{ color: 'var(--text-dim)' }} />
               </button>
@@ -119,7 +122,7 @@ const Navbar = () => {
                   position: 'absolute',
                   right: 0,
                   top: 'calc(100% + 8px)',
-                  width: '210px',
+                  width: '230px',
                   background: '#ffffff',
                   borderRadius: 'var(--radius-sm)',
                   boxShadow: 'var(--shadow-md)',
@@ -131,61 +134,85 @@ const Navbar = () => {
                     <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-heading)' }}>
                       {user.name}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--primary-700)', fontWeight: 600 }}>
+                    <div style={{ fontSize: '0.72rem', color: isAdmin ? '#991b1b' : 'var(--primary-700)', fontWeight: 600 }}>
                       {user.user_type} • {user.district}
                     </div>
                   </div>
 
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setUserDropdownOpen(false)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.6rem',
-                      padding: '0.6rem 1rem',
-                      fontSize: '0.84rem',
-                      color: 'var(--text-heading)',
-                      textDecoration: 'none'
-                    }}
-                  >
-                    <LayoutDashboard size={15} style={{ color: 'var(--primary-700)' }} />
-                    <span>Dashboard</span>
-                  </Link>
+                  {isAdmin ? (
+                    <>
+                      <Link
+                        to="/admin"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.6rem 1rem',
+                          fontSize: '0.84rem',
+                          color: 'var(--text-heading)',
+                          textDecoration: 'none',
+                          fontWeight: 600
+                        }}
+                      >
+                        <ShieldCheck size={15} style={{ color: '#991b1b' }} />
+                        <span>Admin Console</span>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.6rem 1rem',
+                          fontSize: '0.84rem',
+                          color: 'var(--text-heading)',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <LayoutDashboard size={15} style={{ color: 'var(--primary-700)' }} />
+                        <span>Dashboard</span>
+                      </Link>
 
-                  <Link
-                    to="/machinery-rental"
-                    onClick={() => setUserDropdownOpen(false)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.6rem',
-                      padding: '0.6rem 1rem',
-                      fontSize: '0.84rem',
-                      color: 'var(--text-heading)',
-                      textDecoration: 'none'
-                    }}
-                  >
-                    <CalendarCheck size={15} style={{ color: 'var(--primary-700)' }} />
-                    <span>My Bookings</span>
-                  </Link>
+                      <Link
+                        to="/machinery-rental"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.6rem 1rem',
+                          fontSize: '0.84rem',
+                          color: 'var(--text-heading)',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <CalendarCheck size={15} style={{ color: 'var(--primary-700)' }} />
+                        <span>My Bookings</span>
+                      </Link>
 
-                  <Link
-                    to="/disease-detection"
-                    onClick={() => setUserDropdownOpen(false)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.6rem',
-                      padding: '0.6rem 1rem',
-                      fontSize: '0.84rem',
-                      color: 'var(--text-heading)',
-                      textDecoration: 'none'
-                    }}
-                  >
-                    <History size={15} style={{ color: 'var(--primary-700)' }} />
-                    <span>Scan History</span>
-                  </Link>
+                      <Link
+                        to="/disease-detection"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.6rem 1rem',
+                          fontSize: '0.84rem',
+                          color: 'var(--text-heading)',
+                          textDecoration: 'none'
+                        }}
+                      >
+                        <History size={15} style={{ color: 'var(--primary-700)' }} />
+                        <span>Scan History</span>
+                      </Link>
+                    </>
+                  )}
 
                   <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '0.35rem', paddingTop: '0.35rem' }}>
                     <button
@@ -239,7 +266,9 @@ const Navbar = () => {
         {isAuthenticated && user && (
           <div style={{ padding: '0.8rem 1rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: '0.5rem' }}>
             <div style={{ fontWeight: 700, color: 'var(--text-heading)' }}>{user.name}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--primary-700)' }}>{user.user_type} • {user.district}</div>
+            <div style={{ fontSize: '0.78rem', color: isAdmin ? '#991b1b' : 'var(--primary-700)' }}>
+              {user.user_type} • {user.district}
+            </div>
           </div>
         )}
 
@@ -262,15 +291,27 @@ const Navbar = () => {
 
         {isAuthenticated ? (
           <>
-            <NavLink
-              to="/dashboard"
-              className="nav-link"
-              onClick={() => setMobileMenuOpen(false)}
-              style={{ padding: '0.8rem 1rem' }}
-            >
-              <LayoutDashboard size={18} />
-              <span>Dashboard</span>
-            </NavLink>
+            {isAdmin ? (
+              <NavLink
+                to="/admin"
+                className="nav-link"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ padding: '0.8rem 1rem', color: '#991b1b', fontWeight: 700 }}
+              >
+                <ShieldCheck size={18} />
+                <span>Admin Console</span>
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/dashboard"
+                className="nav-link"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ padding: '0.8rem 1rem' }}
+              >
+                <LayoutDashboard size={18} />
+                <span>Dashboard</span>
+              </NavLink>
+            )}
             <button
               type="button"
               onClick={handleLogoutClick}

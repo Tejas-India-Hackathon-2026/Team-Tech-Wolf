@@ -54,9 +54,15 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      await login(identifier, password, rememberMe);
-      // Navigate to intended destination
-      navigate(fromLocation, { replace: true, state: { pendingAction } });
+      const res = await login(identifier, password, rememberMe);
+      const userRole = res?.user?.user_type;
+      
+      // Navigate to admin console if admin, or previous intended destination
+      if (userRole === 'Admin') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate(fromLocation, { replace: true, state: { pendingAction } });
+      }
     } catch (err) {
       setErrorMessage(err.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -72,6 +78,9 @@ const LoginPage = () => {
     } else if (type === 'owner') {
       setIdentifier(DEMO_CREDENTIALS.owner.identifier);
       setPassword(DEMO_CREDENTIALS.owner.password);
+    } else if (type === 'admin') {
+      setIdentifier(DEMO_CREDENTIALS.admin.identifier);
+      setPassword(DEMO_CREDENTIALS.admin.password);
     }
   };
 
@@ -168,7 +177,7 @@ const LoginPage = () => {
             <Sparkles size={13} style={{ color: 'var(--accent-gold)' }} />
             Quick Demo Login:
           </span>
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => handleFillDemo('farmer')}
@@ -183,7 +192,7 @@ const LoginPage = () => {
                 fontWeight: 600
               }}
             >
-              👨‍🌾 Demo Farmer
+              👨‍🌾 Farmer
             </button>
             <button
               type="button"
@@ -199,7 +208,23 @@ const LoginPage = () => {
                 fontWeight: 600
               }}
             >
-              🚜 Machinery Owner
+              🚜 Owner
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFillDemo('admin')}
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.25rem 0.55rem',
+                borderRadius: 'var(--radius-sm)',
+                background: '#ffffff',
+                border: '1px solid #fca5a5',
+                color: '#991b1b',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              🛡️ Demo Admin
             </button>
           </div>
         </div>

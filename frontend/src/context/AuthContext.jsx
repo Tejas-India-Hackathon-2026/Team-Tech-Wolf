@@ -61,6 +61,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     isFarmer: user?.user_type === 'Farmer',
     isMachineryOwner: user?.user_type === 'Machinery Owner',
+    isAdmin: user?.user_type === 'Admin',
     login,
     register,
     logout,

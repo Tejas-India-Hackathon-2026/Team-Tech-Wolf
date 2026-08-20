@@ -21,6 +21,15 @@ export const DEMO_CREDENTIALS = {
     name: 'Suresh Singh Machinery',
     state: 'Maharashtra',
     district: 'Pune'
+  },
+  admin: {
+    identifier: '9876500000',
+    email: 'admin@agro-smart.com',
+    password: 'Admin@123',
+    role: 'Admin',
+    name: 'AGRO-SMART System Admin',
+    state: 'Maharashtra',
+    district: 'Pune'
   }
 };
 
@@ -58,7 +67,8 @@ export const authService = {
             user_type: DEMO_CREDENTIALS.farmer.role,
             state: DEMO_CREDENTIALS.farmer.state,
             district: DEMO_CREDENTIALS.farmer.district,
-            avatar: '👨‍🌾'
+            avatar: '👨‍🌾',
+            status: 'Active'
           };
         } else {
           throw new Error('Invalid password. Please try again.');
@@ -73,7 +83,24 @@ export const authService = {
             user_type: DEMO_CREDENTIALS.owner.role,
             state: DEMO_CREDENTIALS.owner.state,
             district: DEMO_CREDENTIALS.owner.district,
-            avatar: '🚜'
+            avatar: '🚜',
+            status: 'Active'
+          };
+        } else {
+          throw new Error('Invalid password. Please try again.');
+        }
+      } else if (cleanId === DEMO_CREDENTIALS.admin.identifier || cleanId === DEMO_CREDENTIALS.admin.email) {
+        if (password === DEMO_CREDENTIALS.admin.password) {
+          matched = {
+            id: 'usr-demo-admin-00',
+            name: DEMO_CREDENTIALS.admin.name,
+            email: DEMO_CREDENTIALS.admin.email,
+            phone: DEMO_CREDENTIALS.admin.identifier,
+            user_type: 'Admin',
+            state: DEMO_CREDENTIALS.admin.state,
+            district: DEMO_CREDENTIALS.admin.district,
+            avatar: '🛡️',
+            status: 'Active'
           };
         } else {
           throw new Error('Invalid password. Please try again.');

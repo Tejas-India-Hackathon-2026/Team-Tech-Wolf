@@ -20,7 +20,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.user_type)) {
-    return <Navigate to="/dashboard" replace />;
+    // Block unauthorized role and redirect safely to /dashboard
+    return (
+      <Navigate 
+        to="/dashboard" 
+        state={{ unauthorized: true, attemptedRole: allowedRoles[0] }} 
+        replace 
+      />
+    );
   }
 
   return children;

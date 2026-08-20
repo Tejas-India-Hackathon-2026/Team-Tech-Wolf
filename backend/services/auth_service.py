@@ -1,6 +1,7 @@
 """
 AGRO-SMART Authentication Service
-Handles user registration, credential verification, password hashing, and session tokens.
+Handles user registration, credential verification, password hashing, session tokens,
+and admin user management.
 Supports local demo mode with in-memory stores and Supabase database fallback.
 """
 import hashlib
@@ -16,8 +17,21 @@ def _hash_password(password: str) -> str:
     """Generates salted SHA-256 hash for secure credential storage."""
     return hashlib.sha256(f"{password}:{AUTH_SALT}".encode()).hexdigest()
 
-# Pre-seeded Hackathon Demo Accounts
+# Pre-seeded Hackathon Demo Accounts (Farmer, Machinery Owner, and Admin)
 INITIAL_DEMO_USERS = [
+    {
+        "id": "usr-demo-admin-00",
+        "name": "AGRO-SMART System Admin",
+        "email": "admin@agro-smart.com",
+        "phone": "9876500000",
+        "password_hash": _hash_password("Admin@123"),
+        "user_type": "Admin",
+        "state": "Maharashtra",
+        "district": "Pune",
+        "avatar": "🛡️",
+        "status": "Active",
+        "created_at": "2026-08-01 08:00:00"
+    },
     {
         "id": "usr-demo-farmer-01",
         "name": "Rameshwar Patel",
@@ -28,6 +42,7 @@ INITIAL_DEMO_USERS = [
         "state": "Bihar",
         "district": "Patna",
         "avatar": "👨‍🌾",
+        "status": "Active",
         "created_at": "2026-08-01 10:00:00"
     },
     {
@@ -40,6 +55,7 @@ INITIAL_DEMO_USERS = [
         "state": "Maharashtra",
         "district": "Pune",
         "avatar": "🚜",
+        "status": "Active",
         "created_at": "2026-08-01 11:30:00"
     }
 ]
@@ -52,6 +68,7 @@ def register_user(data: dict):
     """
     Registers a new user (Farmer or Machinery Owner).
     Validates required fields, checks for duplicate email/phone, hashes password.
+    Enforces security constraint: Users can NEVER self-register as Admin.
     """
     name = (data.get("name") or data.get("fullName") or "").strip()
     phone = (data.get("phone") or data.get("mobileNumber") or "").strip()
@@ -69,6 +86,8 @@ def register_user(data: dict):
         return None, "Valid email address is required."
     if not password or len(password) < 6:
         return None, "Password must be at least 6 characters long."
+    
+    # Strictly forbid public Admin registration
     if user_type not in ["Farmer", "Machinery Owner"]:
         user_type = "Farmer"
 
@@ -89,6 +108,7 @@ def register_user(data: dict):
         "state": state,
         "district": district,
         "avatar": "🚜" if user_type == "Machinery Owner" else "👨‍🌾",
+        "status": "Active",
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
     }
 
@@ -143,7 +163,10 @@ def authenticate_user(identifier: str, password: str):
             break
 
     if not matched_user:
-        return None, "No account found with this mobile number or email. Please register."
+        return None, "No account found with this mobile number or email. Please check or register."
+
+    if matched_user.get("status") == "Disabled":
+        return None, "This account has been disabled by the administrator."
 
     if matched_user["password_hash"] != hashed_input:
         return None, "Invalid password. Please check and try again."
@@ -178,6 +201,38 @@ def logout_token(token: str):
         del SESSIONS_STORE[token]
     return True
 
+# Admin User Management Methods
+def get_all_users():
+    """Returns list of all sanitized user accounts for the Admin Dashboard."""
+    return [_sanitize_user(u) for u in USERS_STORE]
+
+def toggle_user_status(user_id: str):
+    """Enables or disables a demo user account."""
+    for u in USERS_STORE:
+        if u["id"] == user_id:
+            if u.get("user_type") == "Admin":
+                return None, "Cannot disable the primary Admin account."
+            u["status"] = "Disabled" if u.get("status") == "Active" else "Active"
+            return _sanitize_user(u), None
+    return None, "User not found."
+
+def change_user_role(user_id: str, new_role: str):
+    """
+    Toggles user role between Farmer and Machinery Owner.
+    Strictly forbids promoting any regular user to Admin.
+    """
+    if new_role not in ["Farmer", "Machinery Owner"]:
+        return None, "Invalid role. Role must be 'Farmer' or 'Machinery Owner'."
+
+    for u in USERS_STORE:
+        if u["id"] == user_id:
+            if u.get("user_type") == "Admin":
+                return None, "Cannot modify Admin account role."
+            u["user_type"] = new_role
+            u["avatar"] = "🚜" if new_role == "Machinery Owner" else "👨‍🌾"
+            return _sanitize_user(u), None
+    return None, "User not found."
+
 def _sanitize_user(user: dict) -> dict:
     """Removes sensitive password hashes before returning user profile to frontend."""
     return {
@@ -189,5 +244,6 @@ def _sanitize_user(user: dict) -> dict:
         "state": user["state"],
         "district": user["district"],
         "avatar": user.get("avatar", "👨‍🌾"),
+        "status": user.get("status", "Active"),
         "created_at": user.get("created_at")
     }

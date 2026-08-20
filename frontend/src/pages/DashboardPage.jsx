@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   User, 
   ScanSearch, 
@@ -23,7 +23,8 @@ import {
   X, 
   Info,
   ChevronRight,
-  LogOut
+  LogOut,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { diseaseService } from '../services/diseaseService';
@@ -36,6 +37,8 @@ import Modal from '../components/Modal';
 const DashboardPage = () => {
   const { user, logout, isFarmer, isMachineryOwner } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isUnauthorized = location.state?.unauthorized;
 
   // Activity States
   const [recentScans, setRecentScans] = useState([]);
@@ -169,6 +172,27 @@ const DashboardPage = () => {
   return (
     <div className="page-wrapper container">
       
+      {/* Unauthorized Access Notification */}
+      {isUnauthorized && (
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: 'var(--radius-md)',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          color: '#991b1b',
+          fontSize: '0.88rem'
+        }}>
+          <AlertCircle size={20} style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Access Restricted:</strong> Administrator credentials are required to view the AGRO-SMART Admin Console. You have been redirected to your personal dashboard.
+          </div>
+        </div>
+      )}
+
       {/* Top Welcome Header */}
       <div style={{
         background: '#ffffff',
